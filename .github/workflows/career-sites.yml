@@ -1,12 +1,15 @@
 name: Career Sites
 
-# Reads the companies' own career sites (see PORTALS in company_portals.py) once for every candidate
-# and mails each new opening once.
+# Reads the companies' own career sites and job boards (see PORTALS in company_portals.py) and mails
+# each candidate their new openings, each opening once.
 #
-# A mail goes out when a new opening is in one of the candidate's cities (or remote in India, when the
-# candidate allows it), is one of the candidate's roles, is full-time, and asks for experience that
-# includes the candidate's years (table 1). A posting that states no years is listed apart, in
-# table 2, and only at the candidate's skill match or more.
+# One job does it for everyone: every site is read a single time, then each candidate is judged
+# against what was read. The reading does not grow with the number of candidates, so this scan has
+# no practical limit on how many people it serves.
+#
+# A candidate is mailed when a new opening is in one of their cities (or remote in India, when they
+# allow it), is one of their roles, is full-time, and asks for experience that includes their years.
+# A posting that states no years is listed apart, and only at the candidate's skill match or more.
 #
 # hourly-timer.yml starts this once an hour, after it has started the LinkedIn report.
 # To start it by hand: Actions -> Career Sites -> Run workflow ("dry_run" sends nothing).
@@ -38,45 +41,13 @@ concurrency:
 
 env:
   DATA_REPO: ${{ github.repository_owner }}/${{ vars.DATA_REPO || 'job-alerts-data' }}
-  STATE_FILE: data/company_portal_state.json
 
 jobs:
-  candidates:
-    name: List candidates
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      scans: ${{ steps.list.outputs.sites }}
-      count: ${{ steps.list.outputs.sites_count }}
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Check out the candidates' settings
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ env.DATA_REPO }}
-          ssh-key: ${{ secrets.DATA_REPO_KEY }}
-          path: candidates-data
-
-      - name: List the candidates
-        id: list
-        env:
-          INPUT_ONLY: ${{ inputs.only }}
-        run: python3 tools/matrix.py candidates-data --only "$INPUT_ONLY" >> "$GITHUB_OUTPUT"
-
   scan:
-    name: Scan ${{ matrix.id }}
-    needs: candidates
-    if: ${{ needs.candidates.outputs.count != '0' }}
+    name: Scan for every candidate
     runs-on: ubuntu-latest
-    # Thirteen career sites and 65 job boards. A board is one quick request; a usual run takes about 5 minutes.
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      max-parallel: 6
-      matrix:
-        include: ${{ fromJSON(needs.candidates.outputs.scans) }}
+    # Reading 78 sources takes about 4 minutes; each candidate adds a few seconds.
+    timeout-minutes: 120
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -95,34 +66,37 @@ jobs:
           cache: pip
           cache-dependency-path: requirements.txt
 
-      # What was already judged and already mailed for this candidate, handed from run to run.
+      # What each candidate has already been judged against and mailed: one file per candidate, handed from run to run.
       - name: Restore scan history
         uses: actions/cache/restore@v4
         with:
-          path: ${{ env.STATE_FILE }}
-          key: sites-v1-${{ matrix.id }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: data/portal_state
+          key: sites-all-v1-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            sites-v1-${{ matrix.id }}-
+            sites-all-v1-
 
       - name: Install dependencies
         run: python -m pip install --upgrade pip && pip install -r requirements.txt
 
-      - name: Scan the career sites and mail what is new
-        timeout-minutes: 54
+      - name: Read every site once, then judge and mail each candidate
+        timeout-minutes: 110
         env:
           GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-          CANDIDATE_PROFILE: candidates-data/candidates/${{ matrix.id }}.json
           # Optional free AI reader of postings (brain.py); with neither key set the built-in rules are used alone.
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           BRAIN_GEMINI_MODELS: ${{ vars.BRAIN_GEMINI_MODELS }}
           BRAIN_GROQ_MODELS: ${{ vars.BRAIN_GROQ_MODELS }}
           # Inputs go through the environment, not straight into the script text.
+          INPUT_ONLY: ${{ inputs.only }}
           INPUT_COMPANIES: ${{ inputs.companies }}
           INPUT_DRY_RUN: ${{ inputs.dry_run }}
         run: |
-          ARGS=()
+          ARGS=(--all candidates-data)
+          if [ -n "$INPUT_ONLY" ]; then
+            ARGS+=(--only "$INPUT_ONLY")
+          fi
           if [ -n "$INPUT_COMPANIES" ]; then
             ARGS+=(--companies "$INPUT_COMPANIES")
           fi
@@ -133,8 +107,8 @@ jobs:
 
       - name: Save scan history
         # Also after a failed scan, so an opening that was mailed is never mailed twice.
-        if: ${{ !cancelled() && hashFiles('data/company_portal_state.json') != '' }}
+        if: ${{ !cancelled() && hashFiles('data/portal_state/*.json') != '' }}
         uses: actions/cache/save@v4
         with:
-          path: ${{ env.STATE_FILE }}
-          key: sites-v1-${{ matrix.id }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: data/portal_state
+          key: sites-all-v1-${{ github.run_id }}-${{ github.run_attempt }}

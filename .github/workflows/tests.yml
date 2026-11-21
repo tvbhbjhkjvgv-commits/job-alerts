@@ -55,6 +55,9 @@ jobs:
       - name: Candidate profiles and the candidate list
         run: python tests/test_profiles.py
 
+      - name: Career scan for all candidates in one run
+        run: python tests/test_shared_scan.py
+
       - name: AI reader of postings (no model is contacted)
         run: python tests/test_brain.py
 

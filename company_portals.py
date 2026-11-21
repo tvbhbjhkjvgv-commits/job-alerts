@@ -29,6 +29,7 @@ import re
 import time
 import xml.etree.ElementTree as ElementTree
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Sequence, Tuple
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
@@ -48,6 +49,11 @@ NEWEST_PER_SEARCH = 100
 MAX_DETAIL_PAGES = 40
 # Longest one site may take in one run.
 SITE_BUDGET_SECONDS = 240.0
+# In a run for all candidates (--all): the search words sent to the sites, the seconds each candidate gets
+# for opening job pages on one site, and the job pages one site is asked for in the whole run.
+SHARED_KEYWORDS = 40
+SHARED_SITE_SECONDS = 45.0
+SHARED_DETAIL_PAGES = 120
 REQUEST_PAUSE_SECONDS = 0.5
 # A posting waits this long for a mail that could not be delivered, then it is dropped.
 HELD_DAYS = 7.0
@@ -72,11 +78,16 @@ class Site:
         self.session = core.requests.Session()
         self.keywords = list(keywords)
         self.candidate_yoe = candidate_yoe  # for a site whose search can be narrowed by years of experience
+        self.candidate_years = [candidate_yoe]  # every candidate's years, in a run for all of them
         self.deadline = time.monotonic() + SITE_BUDGET_SECONDS
         self.requests_made = 0
 
     def out_of_time(self) -> bool:
         return time.monotonic() > self.deadline
+
+    def more_time(self, seconds: float) -> None:
+        """Allow this many more seconds from now (a run for all candidates opens job pages for each in turn)."""
+        self.deadline = time.monotonic() + seconds
 
     def fetch(self, url: str, params: Dict[str, Any] | None = None, accept: str = "application/json",
               data: Dict[str, Any] | None = None) -> Any:
@@ -600,7 +611,8 @@ def _city_spellings() -> List[str]:
 
 
 def read_accenture(site: Site) -> List[Dict[str, Any]]:
-    bands = [f"Experience: {low}-{high} years" for low, high in _ACCENTURE_BANDS if low <= site.candidate_yoe <= high]
+    years = getattr(site, "candidate_years", None) or [site.candidate_yoe]
+    bands = [f"Experience: {low}-{high} years" for low, high in _ACCENTURE_BANDS if any(low <= year <= high for year in years)]
     filters = [{"fieldName": "location.keyword", "items": _city_spellings(), "multiSelect": False}] if SEARCH_CITIES else []
     if bands:
         filters.append({"fieldName": "yearsOfExperience.keyword", "items": bands, "multiSelect": False})
@@ -879,6 +891,7 @@ def save_state(state: Dict[str, Any], path: Any = None) -> None:
         cutoff = (now - timedelta(days=days)).isoformat()
         return {key: stamp for key, stamp in stamps.items() if str(stamp) >= cutoff}
 
+    Path(path or STATE_FILE).parent.mkdir(parents=True, exist_ok=True)
     state["decided"] = newer_than(state["decided"], DECIDED_DAYS)
     state["reported"] = newer_than(state["reported"], REPORTED_DAYS)
     (path or STATE_FILE).write_text(json.dumps({**state, "updated_at": now.isoformat()}, ensure_ascii=False), encoding="utf-8")
@@ -933,17 +946,68 @@ def listed_experience_excludes(job: Dict[str, Any], candidate_yoe: float) -> boo
     return bool(listed["experience"]) and core.experience_is_stated(listed) and not core.experience_is_eligible(listed, candidate_yoe)
 
 
-def scan_site(key: str, state: Dict[str, Any], args: argparse.Namespace, now_iso: str, portals: Any = None) -> Dict[str, Any]:
-    """Read one career site and judge the postings not judged before."""
+class SharedListings:
+    """Every site read once, for all the candidates of one run.
+
+    Reading a company's list costs the same whoever it is read for, so in a run for all candidates
+    (--all) each site is read a single time and every candidate is judged against that one reading.
+    A job page opened for one candidate, and the AI reader's answer for a posting, are kept here too,
+    so neither is fetched again for the next candidate.
+    """
+
+    def __init__(self, keywords: Sequence[str], years: Sequence[float], portals: Any = None):
+        self.keywords, self.years, self.portals = list(keywords), list(years) or [2.0], portals or PORTALS
+        self.sites: Dict[str, Site] = {}
+        self.listings: Dict[str, List[Dict[str, Any]]] = {}
+        self.errors: Dict[str, Exception] = {}
+        self.pages_left: Dict[str, int] = {}
+        self.brain: Dict[str, Dict[str, Any]] = {}
+
+    def read_all(self, keys: Sequence[str]) -> None:
+        for key in keys:
+            name, reader = self.portals[key]
+            site = Site(self.keywords, self.years[0])
+            site.candidate_years = list(self.years)
+            self.sites[key] = site
+            self.pages_left[key] = SHARED_DETAIL_PAGES
+            try:
+                self.listings[key] = reader(site)
+                LOG.info("Read %s: %d India posting(s) (%d request(s)).", name, len(self.listings[key]), site.requests_made)
+            except Exception as exc:  # one site failing must not stop the others
+                self.errors[key] = exc
+                detail = str(exc) if isinstance(exc, PortalError) else f"{type(exc).__name__}: {exc}"
+                LOG.warning("%s could not be read (%s).", name, detail)
+                print(f"::warning::{name} could not be read: {detail}")
+
+    def listing(self, key: str) -> Tuple[Site, List[Dict[str, Any]]]:
+        if key in self.errors:
+            raise self.errors[key]
+        site = self.sites[key]
+        site.more_time(SHARED_SITE_SECONDS)  # each candidate gets a short allowance for job pages on this site
+        return site, self.listings[key]
+
+
+def scan_site(key: str, state: Dict[str, Any], args: argparse.Namespace, now_iso: str, portals: Any = None,
+              shared: SharedListings | None = None) -> Dict[str, Any]:
+    """Judge one career site's postings that this candidate has not been judged against before.
+
+    Without `shared` the site is read here, for this candidate alone. With it, the list read once for
+    everyone is used, and each posting is judged on a copy so one candidate's result never touches another's.
+    """
     name, reader = (portals or PORTALS)[key]
-    site = Site(args.keyword_list, args.candidate_yoe)
-    listing = reader(site)
+    if shared is None:
+        site = Site(args.keyword_list, args.candidate_yoe)
+        listing = reader(site)
+        pages_left = MAX_DETAIL_PAGES
+    else:
+        site, listing = shared.listing(key)
+        pages_left = min(MAX_DETAIL_PAGES, shared.pages_left.get(key, 0))
     summary: Dict[str, Any] = {"listed": len(listing), "new": 0, "waiting": 0, "candidates": [], "reasons": {}}
-    pages_left = MAX_DETAIL_PAGES
     ready: List[Tuple[Dict[str, Any], str]] = []
-    for job in listing:
+    for source in listing:
+        job = {field: value for field, value in source.items() if field != "_detail"}
+        fill = source.get("_detail")
         job_id = job["job_id"]
-        fill = job.pop("_detail", None)
         if job_id in state["decided"]:
             state["decided"][job_id] = now_iso  # still on the site
             continue
@@ -957,29 +1021,41 @@ def scan_site(key: str, state: Dict[str, Any], args: argparse.Namespace, now_iso
                 summary["waiting"] += 1
                 continue
             pages_left -= 1
+            if shared is not None:
+                shared.pages_left[key] -= 1
             try:
-                fill(site, job)
+                fill(site, source)  # the page's text is kept on the record that was read, so it is opened once
             except PortalError as exc:
                 LOG.info("%s: could not open %s (%s); it is tried again next run.", name, job["job_url"], exc)
+            job = {field: value for field, value in source.items() if field != "_detail"}
         if not early and not job["description"].strip():
             summary["waiting"] += 1
             continue
         state["decided"][job_id] = now_iso
         ready.append((job, early))
-    # The AI reader (when a key is set) reads the postings still in the running, all together, before they are judged.
-    core.read_with_brain([job for job, early in ready if not early], args.candidate_yoe)
+    # The AI reader (when a key is set) reads the postings still in the running, all together, before they are
+    # judged. What it says about a posting does not depend on the candidate, so one answer serves everyone.
+    in_running = [job for job, early in ready if not early]
+    if shared is not None:
+        for job in in_running:
+            if job["job_id"] in shared.brain:
+                job["brain"] = shared.brain[job["job_id"]]
+    core.read_with_brain(in_running, args.candidate_yoe)
+    if shared is not None:
+        shared.brain.update({job["job_id"]: job["brain"] for job in in_running if job.get("brain")})
     for job, early in ready:
         kind, reason = ("", early) if early else judge(job, args.candidate_yoe, args.min_match, getattr(args, "stated_min_match", 0))
         summary["reasons"][reason or kind] = summary["reasons"].get(reason or kind, 0) + 1
         if kind:
             job["portal_class"] = kind
             summary["candidates"].append(job)
-    LOG.info(
-        "%s: %d India posting(s) listed, %d not judged before, %d still to open; %s (%d request(s)).",
-        name, summary["listed"], summary["new"], summary["waiting"],
-        ", ".join(f"{k} {v}" for k, v in sorted(summary["reasons"].items(), key=lambda kv: -kv[1])) or "nothing new",
-        site.requests_made,
-    )
+    if shared is None or summary["candidates"]:  # in a run for everyone, only a site with a match earns a line
+        LOG.info(
+            "%s: %d India posting(s) listed, %d not judged before, %d still to open; %s (%d request(s)).",
+            name, summary["listed"], summary["new"], summary["waiting"],
+            ", ".join(f"{k} {v}" for k, v in sorted(summary["reasons"].items(), key=lambda kv: -kv[1])) or "nothing new",
+            site.requests_made,
+        )
     return summary
 
 
@@ -1035,7 +1111,8 @@ def _order(record: Dict[str, Any]) -> Tuple[int, str, str]:
     return (-int(record.get("skill_match_pct", 0)), str(record.get("company", "")), str(record.get("title", "")).lower())
 
 
-def run_scan(args: argparse.Namespace, portals: Any = None, report: Dict[str, Any] | None = None) -> int:
+def run_scan(args: argparse.Namespace, portals: Any = None, report: Dict[str, Any] | None = None,
+             shared: SharedListings | None = None) -> int:
     """Scan the sites in args.company_list and mail what is new.
 
     portals / report: another scan's sites and words (default: the company career sites).
@@ -1044,7 +1121,8 @@ def run_scan(args: argparse.Namespace, portals: Any = None, report: Dict[str, An
     report = report or COMPANY_SITES
     stated_min_match = int(getattr(args, "stated_min_match", 0) or 0)
     state = load_state(report["state_file"])
-    core.brain.start_run()
+    if shared is None:
+        core.brain.start_run()
     now_iso = datetime.now(timezone.utc).isoformat()
     notes: List[str] = []
     read_ok: List[str] = []
@@ -1052,7 +1130,7 @@ def run_scan(args: argparse.Namespace, portals: Any = None, report: Dict[str, An
     for key in args.company_list:
         name = portals[key][0]
         try:
-            summary = scan_site(key, state, args, now_iso, portals)
+            summary = scan_site(key, state, args, now_iso, portals, shared)
         except Exception as exc:  # one site failing must not stop the others
             runs = int(state["failures"].get(key, 0)) + 1
             state["failures"][key] = runs
@@ -1138,15 +1216,91 @@ def run_scan(args: argparse.Namespace, portals: Any = None, report: Dict[str, An
     return core._exit_code(mailed)
 
 
-def use_profile(path: Any) -> Dict[str, Any]:
-    """Make this scan a scan for one candidate: the shared rules, and this scan's search words and cities."""
-    global SEARCH_KEYWORDS, SEARCH_CITIES, _FEED_PLACES
-    profile = core.apply_profile(core.load_profile(path))
-    SEARCH_KEYWORDS = list(profile["roles"])
-    SEARCH_CITIES = list(profile["cities"])
+def _use_places(cities: Sequence[str]) -> None:
+    """The cities this run's site searches are narrowed to (one candidate's, or every candidate's together)."""
+    global SEARCH_CITIES, _FEED_PLACES
+    SEARCH_CITIES = list(cities)
     names = [name.title() for city in SEARCH_CITIES for name in core.city_names(city) if len(name) > 3]
     _FEED_PLACES = " OR ".join(f'"{name}"' if " " in name else name for name in names)
+
+
+def use_profile(path: Any) -> Dict[str, Any]:
+    """Make this scan a scan for one candidate: the shared rules, and this scan's search words and cities."""
+    global SEARCH_KEYWORDS
+    profile = core.apply_profile(core.load_profile(path))
+    SEARCH_KEYWORDS = list(profile["roles"])
+    _use_places(profile["cities"])
     return profile
+
+
+def scan_candidates(folder: Any, only: Sequence[str] = ()) -> List[Tuple[Path, Dict[str, Any]]]:
+    """The candidates this scan runs for: active, the career-site scan switched on, and any free trial still running."""
+    found = []
+    for path in sorted((Path(folder) / "candidates").glob("*.json")):
+        try:
+            profile = core.load_profile(path)
+        except ValueError as exc:
+            LOG.warning("%s", exc)
+            continue
+        if profile["id"] != path.stem.lower() or (only and profile["id"] not in only):
+            continue
+        if profile["enabled"] and profile["career_sites"]["enabled"] and not core.trial_is_over(profile):
+            found.append((path, profile))
+    return found
+
+
+def run_all(args: argparse.Namespace, portals: Any = None) -> int:
+    """One run for every candidate: read each site once, then judge and mail each candidate in turn.
+
+    The reading does not grow with the number of candidates; only the judging does, and that is quick.
+    One candidate's failure (a bad file, a mail that will not send) never stops the others.
+    """
+    portals = portals or PORTALS
+    people = scan_candidates(args.all, args.only)
+    if not people:
+        LOG.info("No candidate has the career-site scan switched on. Nothing to do.")
+        return 0
+    # What the sites are asked for: the roles most candidates share (a site search costs requests per
+    # word, so the list is capped), every candidate's city, and every candidate's years.
+    counts: Dict[str, int] = {}
+    spelling: Dict[str, str] = {}
+    for _, profile in people:
+        for role in profile["roles"]:
+            counts[role.lower()] = counts.get(role.lower(), 0) + 1
+            spelling.setdefault(role.lower(), role)
+    keywords = [spelling[role] for role in sorted(counts, key=lambda r: (-counts[r], r))][:SHARED_KEYWORDS]
+    cities = list(dict.fromkeys(city for _, profile in people for city in profile["cities"]))
+    years = sorted({profile["experience_years"] for _, profile in people})
+    wanted = set(args.company_list)
+    if not wanted:
+        for _, profile in people:
+            own = [key for key in profile["career_sites"]["companies"] if key in portals]
+            wanted |= set(own or portals)
+    keys = [key for key in portals if key in wanted]
+    LOG.info("Career scan for %d candidate(s): %d site(s), %d search word(s), %d cit(y/ies).", len(people), len(keys), len(keywords), len(cities))
+
+    _use_places(cities)
+    shared = SharedListings(keywords, years, portals)
+    shared.read_all(keys)
+    core.brain.start_run()
+    failed = 0
+    for path, profile in people:
+        try:
+            use_profile(path)
+            own = [key for key in profile["career_sites"]["companies"] if key in portals]
+            candidate = argparse.Namespace(
+                candidate_yoe=profile["experience_years"], min_match=profile["career_sites"]["min_match"], dry_run=args.dry_run,
+                company_list=[key for key in keys if not own or key in own], keyword_list=keywords,
+            )
+            report = {**COMPANY_SITES, "state_file": core.DATA_DIR / "portal_state" / f"{profile['id']}.json",
+                      "preview": f"company_portals_preview_{profile['id']}.html"}
+            code = run_scan(candidate, portals, report, shared)
+        except Exception:
+            LOG.exception("Candidate %s: the scan failed; carrying on with the next candidate.", profile["id"])
+            code = 1
+        failed += bool(code)
+    LOG.info("Career scan finished: %d candidate(s), %d with a problem.", len(people), failed)
+    return 1 if failed else 0
 
 
 def main() -> int:
@@ -1159,8 +1313,18 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true", help="Send nothing and keep no state; write the mail to reports/ instead")
     parser.add_argument("--profile", type=str, default=core.os.environ.get("CANDIDATE_PROFILE", ""),
                         help="One candidate's settings file (JSON); see candidates.example/")
+    parser.add_argument("--all", type=str, default="",
+                        help="Folder that holds candidates/*.json: scan for every candidate in one run, reading each site once")
+    parser.add_argument("--only", type=str, default="", help="With --all: comma-separated candidate ids (default everyone)")
     args = parser.parse_args()
     wanted = [c.strip().lower() for c in args.companies.split(",") if c.strip()]
+    unknown = [c for c in wanted if c not in PORTALS]
+    if unknown:
+        parser.error(f"unknown site(s): {', '.join(unknown)}. Known: {', '.join(PORTALS)}")
+    if args.all:
+        args.company_list = wanted
+        args.only = [x.strip().lower() for x in args.only.split(",") if x.strip()]
+        return run_all(args)
     if args.profile:
         profile = use_profile(args.profile)
         if core.trial_is_over(profile):
@@ -1173,9 +1337,6 @@ def main() -> int:
         args.min_match = profile["career_sites"]["min_match"]
         # An unknown company in the file is skipped, so a site that is later removed does not stop the scan.
         wanted = wanted or [key for key in profile["career_sites"]["companies"] if key in PORTALS]
-    unknown = [c for c in wanted if c not in PORTALS]
-    if unknown:
-        parser.error(f"unknown site(s): {', '.join(unknown)}. Known: {', '.join(PORTALS)}")
     args.company_list = wanted or list(PORTALS)
     args.keyword_list = [k.strip() for k in args.keywords.split(",") if k.strip()] or SEARCH_KEYWORDS
     return run_scan(args)

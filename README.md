@@ -75,7 +75,8 @@ For the welcome mail to go out the moment a candidate is saved, also give the to
 
 ## How it runs
 
-- `tools/matrix.py` reads the candidates' files and lists who gets which alert. Each workflow then runs one job per candidate (the LinkedIn report also one search job per candidate and place).
+- **Career pages: one job for everyone.** `company_portals.py --all` reads every site once, then judges and mails each candidate in turn; the reading does not grow with the number of candidates.
+- **LinkedIn report and fast alert: one job per candidate.** `tools/matrix.py` reads the candidates' files and lists who gets which of these (the LinkedIn report also runs one search job per candidate and place).
 - Every run is for exactly one candidate: `--profile candidates-data/candidates/<id>.json` replaces the built-in settings with that person's (see `apply_profile` in `job_match_runner.py`).
 - What each candidate has already been sent is kept per candidate in the Actions cache, so nobody is mailed the same opening twice.
 - `hourly-timer.yml` starts the LinkedIn report and the career-site scan once an hour; `fast-alert.yml` restarts itself; `timer-watchdog.yml` restarts either chain if it stops.
@@ -108,6 +109,7 @@ Expect match percentages to move once it is on: a posting that asks for five too
 ### Limits to know about
 
 - **GitHub Actions is for the owner and a few friends.** GitHub's terms do not allow running a paid service on it, and a free account runs at most 20 jobs at once.
+- **Career pages have no practical limit on candidates; LinkedIn and the fast alert do.** The figures below are for candidates with those two switched on.
 - **About 10 to 12 candidates with all three alerts on.** Each fast alert holds one of the 20 job slots all day; each candidate's hourly work is about 18 minutes of jobs (a search per place at 2 to 7 minutes, a report, a career-site scan). At 12 candidates the hourly work finishes in about half an hour; at 16 it no longer fits in the hour and the runs queue up. With the fast alert off for most people the same account carries more, until LinkedIn starts refusing the searches. These figures are worked out from measured job times, not from a load test.
 - **Each candidate is a separate set of requests** to LinkedIn and to the career sites. The scans are polite (pauses, time limits, and they stop when refused), but the load grows with every candidate.
 - **A resume is not proof.** The page guesses years of experience from the resume's wording and dates and shows both; the saved figure is whatever is in the field.
@@ -130,6 +132,8 @@ python tests/test_experience.py        # the years-of-experience reader
 python tests/test_pipeline.py          # report, mail and failure paths
 python tests/test_fast_alert.py
 python tests/test_company_portals.py
+python tests/test_shared_scan.py       # the career scan for all candidates in one run
+python tests/test_brain.py             # the optional AI reader (no model is contacted)
 node tests/test_page.js                # the settings page's resume reader
 python tools/build_page_data.py        # after changing skills, cities or career sites: rewrites docs/data.js
 ```
