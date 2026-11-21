@@ -242,6 +242,34 @@ check("an empty table is left out", "states no years" not in MAILS["fast alert"]
 check("a quiet hour, for a candidate who asked for hourly mails, is one line",
       "No new matching jobs in the last 1 hour(s)." in core.build_status_email_html([found], 1.0, 2.0) and "<table" not in core.build_status_email_html([found], 1.0, 2.0))
 
+# --- 8. years and skills as postings actually word them ----------------------------------------------
+YEARS = [
+    ("We need one to two years of experience in Python.", (1.0, 2.0)),
+    ("Experience: two-three years", (2.0, 3.0)),
+    ("Minimum of two (2) years of experience", (2.0, None)),
+    ("three (3)+ years of hands-on experience", (3.0, None)),
+    ("Years of experience - 2", (2.0, None)),
+    ("Years of experience: 3+", (3.0, None)),
+    ("Years of experience - 2 to 4 years", (2.0, 4.0)),
+    ("a couple of years of experience in data analysis", (2.0, None)),
+    ("18 months of experience in support", (1.5, None)),
+    ("Required experience – Two to Five years", (2.0, 5.0)),
+    ("Experience Level: 2", (None, None)),
+]
+misread = [(text, core.parse_experience_requirement({"title": "Developer", "description": text}), want) for text, want in YEARS
+           if core.parse_experience_requirement({"title": "Developer", "description": text}) != want]
+check("years are read when written in words, with the figure in brackets, or after a label", not misread, str(misread))
+
+NAMED = {  # how real postings name a skill -> the skill it is
+    "NodeJS": "node.js", "Node.js": "node.js", "ANGULARJS2": "angular", "MLOps": "mlops", "Machine Learning Operations": "mlops",
+    "Data Science": "data science", "Data Build Tool": "dbt", "Qlik Replicate": "qlik", "Teradata BI": "teradata", "TOSCA": "tosca",
+    "Penetration Testing": "penetration testing", "Site Reliability Engineering(SRE)": "sre", "Informatica Intelligent Cloud services(IICS)": "informatica",
+    "UIPath": "uipath", "Palantir Foundry": "palantir foundry", "Microsoft Fabric": "microsoft fabric", "Power Query": "power query",
+}
+unseen = [(text, core.canonical_skill_hits(text)) for text, skill in NAMED.items() if skill not in core.canonical_skill_hits(text)]
+check("skills are recognised under the names postings use", not unseen, str(unseen))
+check("a word nearly every posting uses is not counted as a skill", core.canonical_skill_hits("We follow agile practices.") == [])
+
 checked = subprocess.run([sys.executable, str(ROOT / "tools" / "build_page_data.py"), "--check"], capture_output=True, text=True)
 check("the settings page's data file matches the code", checked.returncode == 0, checked.stdout)
 example = core.load_profile(ROOT / "candidates.example" / "example1.json")

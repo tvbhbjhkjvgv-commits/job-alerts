@@ -9,6 +9,18 @@
    "\\bdotnet\\b",
    "\\basp\\.net\\b"
   ],
+  "ab initio": [
+   "\\bab\\s+initio\\b"
+  ],
+  "active directory": [
+   "\\bactive\\s+directory\\b",
+   "\\bentra\\s+id\\b",
+   "\\bazure\\s+ad\\b"
+  ],
+  "aem": [
+   "\\baem\\b",
+   "\\badobe\\s+experience\\s+manager\\b"
+  ],
   "ai agents": [
    "\\bai agents?\\b",
    "\\bagentic ai\\b"
@@ -16,11 +28,15 @@
   "airflow": [
    "\\bairflow\\b"
   ],
+  "alteryx": [
+   "\\balteryx\\b"
+  ],
   "android": [
    "\\bandroid\\b"
   ],
   "angular": [
-   "\\bangular(?:js)?\\b"
+   "\\bangular(?:js)?\\b",
+   "\\bangular(?:\\.?js)?\\d*\\b"
   ],
   "ansible": [
    "\\bansible\\b"
@@ -41,12 +57,24 @@
    "\\basp\\.net\\s+core\\b",
    "\\b\\.net\\s+core\\b"
   ],
+  "autocad": [
+   "\\bauto\\s?cad\\b"
+  ],
+  "automation anywhere": [
+   "\\bautomation\\s+anywhere\\b"
+  ],
   "automation testing": [
    "\\b(?:test\\s+automation|automation\\s+test(?:ing|er)?|automated\\s+test(?:ing|s)?)\\b"
   ],
   "aws": [
    "\\baws\\b",
    "\\bamazon web services\\b"
+  ],
+  "aws glue": [
+   "\\b(?:aws\\s+)?glue\\b"
+  ],
+  "aws lambda": [
+   "\\b(?:aws\\s+)?lambda\\b"
   ],
   "azure": [
    "\\bazure\\b"
@@ -64,6 +92,14 @@
    "\\bbash\\b",
    "\\bshell\\s+script(?:ing|s)?\\b"
   ],
+  "big data": [
+   "\\bbig\\s+data\\b"
+  ],
+  "blockchain": [
+   "\\bblockchain\\b",
+   "\\bsolidity\\b",
+   "\\bethereum\\b"
+  ],
   "bootstrap": [
    "\\bbootstrap\\b"
   ],
@@ -76,8 +112,14 @@
   "c++": [
    "(?<![\\w+#])c\\+\\+(?!\\w)"
   ],
+  "camunda": [
+   "\\bcamunda\\b"
+  ],
   "cassandra": [
    "\\bcassandra\\b"
+  ],
+  "catia": [
+   "\\bcatia\\b"
   ],
   "celery": [
    "\\bcelery\\b"
@@ -87,9 +129,19 @@
    "\\bcontinuous integration\\b",
    "\\bcontinuous deployment\\b"
   ],
+  "cisco": [
+   "\\bcisco\\b",
+   "\\bccna\\b",
+   "\\bccnp\\b"
+  ],
   "computer vision": [
    "\\bcomputer\\s+vision\\b",
    "\\bopencv\\b"
+  ],
+  "conversational ai": [
+   "\\bconversational\\s+ai\\b",
+   "\\bdialog\\s?flow\\b",
+   "\\bchatbots?\\b"
   ],
   "crewai": [
    "\\bcrewai\\b"
@@ -104,18 +156,44 @@
   "cypress": [
    "\\bcypress\\b"
   ],
+  "data analytics": [
+   "\\bdata\\s+analy(?:tics|sis|st)\\b"
+  ],
+  "data engineering": [
+   "\\bdata\\s+engineer(?:ing)?\\b"
+  ],
+  "data governance": [
+   "\\bdata\\s+governance\\b"
+  ],
   "data modeling": [
    "\\bdata\\s+model(?:ing|ling)\\b"
+  ],
+  "data quality": [
+   "\\bdata\\s+quality\\b"
+  ],
+  "data science": [
+   "\\bdata\\s+scien(?:ce|tist)\\b"
   ],
   "data structures": [
    "\\bdata\\s+structures\\b",
    "\\bdsa\\b"
   ],
+  "data warehousing": [
+   "\\bdata\\s+warehous(?:e|ing)\\b",
+   "\\bdwh\\b"
+  ],
   "databricks": [
    "\\bdatabricks\\b"
   ],
+  "datastage": [
+   "\\bdata\\s?stage\\b"
+  ],
   "dax": [
    "\\bdax\\b"
+  ],
+  "dbt": [
+   "\\bdbt\\b",
+   "\\bdata\\s+build\\s+tool\\b"
   ],
   "deep learning": [
    "\\bdeep\\s+learning\\b"
@@ -136,6 +214,9 @@
   ],
   "dynamodb": [
    "\\bdynamodb\\b"
+  ],
+  "dynatrace": [
+   "\\bdynatrace\\b"
   ],
   "elasticsearch": [
    "\\belasticsearch\\b"
@@ -227,11 +308,32 @@
    "\\bhibernate\\b",
    "\\bjpa\\b"
   ],
+  "hive": [
+   "\\bhive\\b"
+  ],
   "html5": [
    "\\bhtml5?\\b"
   ],
+  "iam": [
+   "\\biam\\b",
+   "\\bidentity\\s+(?:and\\s+)?access\\s+management\\b",
+   "\\bsailpoint\\b",
+   "\\bcyberark\\b",
+   "\\bokta\\b"
+  ],
+  "informatica": [
+   "\\binformatica\\b",
+   "\\biics\\b"
+  ],
   "ios": [
    "\\bios\\b"
+  ],
+  "iot": [
+   "\\biot\\b",
+   "\\binternet\\s+of\\s+things\\b"
+  ],
+  "itil": [
+   "\\bitil\\b"
   ],
   "java": [
    "\\bjava\\b",
@@ -275,6 +377,9 @@
   "langgraph": [
    "\\blanggraph\\b"
   ],
+  "liferay": [
+   "\\bliferay\\b"
+  ],
   "linux": [
    "\\blinux\\b"
   ],
@@ -286,6 +391,16 @@
    "\\bllms?\\b",
    "\\blarge language models?\\b"
   ],
+  "llmops": [
+   "\\bllm\\s?ops\\b",
+   "\\bagent\\s?ops\\b"
+  ],
+  "loadrunner": [
+   "\\bload\\s?runner\\b"
+  ],
+  "looker": [
+   "\\blooker\\b"
+  ],
   "machine learning": [
    "\\bmachine\\s+learning\\b",
    "\\bml\\b"
@@ -296,11 +411,30 @@
   "mariadb": [
    "\\bmariadb\\b"
   ],
+  "matplotlib": [
+   "\\bmatplotlib\\b",
+   "\\bseaborn\\b"
+  ],
   "maven": [
    "\\bmaven\\b"
   ],
+  "mdm": [
+   "\\bmdm\\b",
+   "\\bmaster\\s+data\\s+management\\b"
+  ],
   "microservices": [
    "\\bmicroservices?\\b"
+  ],
+  "microsoft fabric": [
+   "\\bmicrosoft\\s+fabric\\b",
+   "\\bms\\s+fabric\\b"
+  ],
+  "microstrategy": [
+   "\\bmicrostrategy\\b"
+  ],
+  "mlops": [
+   "\\bml\\s?ops\\b",
+   "\\bmachine\\s+learning\\s+operations\\b"
   ],
   "mongodb": [
    "\\bmongodb\\b"
@@ -322,10 +456,14 @@
    "\\bnatural\\s+language\\s+processing\\b"
   ],
   "node.js": [
-   "\\bnode(?:\\.js)?\\b"
+   "\\bnode(?:\\.js)?\\b",
+   "\\bnode(?:\\.?js)?\\b"
   ],
   "numpy": [
    "\\bnumpy\\b"
+  ],
+  "office 365": [
+   "\\b(?:office|microsoft|m)\\s?365\\b"
   ],
   "openai api": [
    "\\bopenai api\\b",
@@ -338,8 +476,18 @@
    "\\boracle\\s+(?:db|database|sql)\\b",
    "\\bpl\\s*/?\\s*sql\\b"
   ],
+  "palantir foundry": [
+   "\\bpalantir\\b"
+  ],
   "pandas": [
    "\\bpandas\\b"
+  ],
+  "pega": [
+   "\\bpega\\b"
+  ],
+  "penetration testing": [
+   "\\bpen(?:etration)?\\s+test(?:ing|er)?\\b",
+   "\\bvapt\\b"
   ],
   "pgvector": [
    "\\bpgvector\\b"
@@ -351,14 +499,33 @@
   "playwright": [
    "\\bplaywright\\b"
   ],
+  "plm": [
+   "\\bplm\\b",
+   "\\bteamcenter\\b",
+   "\\bwindchill\\b"
+  ],
   "postgresql": [
    "\\bpostgres(?:ql)?\\b"
   ],
   "postman": [
    "\\bpostman\\b"
   ],
+  "power apps": [
+   "\\bpower\\s?apps\\b",
+   "\\bpower\\s+platform\\b"
+  ],
+  "power automate": [
+   "\\bpower\\s+automate\\b"
+  ],
   "power bi": [
    "\\bpower bi\\b"
+  ],
+  "power query": [
+   "\\bpower\\s+query\\b"
+  ],
+  "project management": [
+   "\\bproject\\s+management\\b",
+   "\\bpmp\\b"
   ],
   "prometheus": [
    "\\bprometheus\\b"
@@ -371,6 +538,9 @@
   ],
   "pytorch": [
    "\\bpytorch\\b"
+  ],
+  "qlik": [
+   "\\bqlik\\s?(?:sense|view|replicate)?\\b"
   ],
   "r": [
    "(?<![\\w&])r\\s+(?:programming|language|studio)\\b",
@@ -396,12 +566,18 @@
   "redux": [
    "\\bredux\\b"
   ],
+  "responsible ai": [
+   "\\b(?:responsible|ethical|explainable)\\s+ai\\b"
+  ],
   "responsive ui": [
    "\\bresponsive (?:ui|user interface|web design)\\b"
   ],
   "rest api": [
    "\\brest(?:ful)? apis?\\b",
    "\\brest api development\\b"
+  ],
+  "rtos": [
+   "\\brtos\\b"
   ],
   "ruby": [
    "\\bruby\\b"
@@ -431,16 +607,31 @@
   "sap sd": [
    "\\bsap\\s+sd\\b"
   ],
+  "sas": [
+   "\\bsas\\b(?!\\s*(?:url|token))"
+  ],
   "sass": [
    "\\bsass\\b",
    "\\bscss\\b"
   ],
+  "sast": [
+   "\\bsast\\b",
+   "\\bdast\\b",
+   "\\bstatic\\s+application\\s+security\\s+testing\\b"
+  ],
   "scala": [
    "\\bscala\\b"
+  ],
+  "sccm": [
+   "\\bsccm\\b",
+   "\\bintune\\b"
   ],
   "scikit-learn": [
    "\\bscikit[- ]learn\\b",
    "\\bsklearn\\b"
+  ],
+  "scrum": [
+   "\\bscrum\\b"
   ],
   "selenium": [
    "\\bselenium\\b"
@@ -451,8 +642,22 @@
   "session management": [
    "\\bsession management\\b"
   ],
+  "siem": [
+   "\\bsiem\\b",
+   "\\bsplunk\\b"
+  ],
+  "sitecore": [
+   "\\bsitecore\\b"
+  ],
   "snowflake": [
    "\\bsnowflake\\b"
+  ],
+  "soc": [
+   "\\bsoc\\s+(?:analyst|operations|monitoring)\\b",
+   "\\bsecurity\\s+operations\\s+cent(?:er|re)\\b"
+  ],
+  "solidworks": [
+   "\\bsolid\\s?works\\b"
   ],
   "spark": [
    "\\bspark\\b",
@@ -474,8 +679,20 @@
   "sqlite": [
    "\\bsqlite\\d?\\b"
   ],
+  "sre": [
+   "\\bsre\\b",
+   "\\bsite\\s+reliability\\b"
+  ],
+  "ssis": [
+   "\\bssis\\b",
+   "\\bssrs\\b",
+   "\\bssas\\b"
+  ],
   "statistics": [
    "\\bstatistic(?:s|al)\\b"
+  ],
+  "streamlit": [
+   "\\bstreamlit\\b"
   ],
   "structured outputs": [
    "\\bstructured outputs?\\b"
@@ -495,25 +712,47 @@
   "tensorflow": [
    "\\btensorflow\\b"
   ],
+  "teradata": [
+   "\\bteradata\\b"
+  ],
   "terraform": [
    "\\bterraform\\b"
   ],
   "testng": [
    "\\btestng\\b"
   ],
+  "tosca": [
+   "\\btosca\\b"
+  ],
   "typescript": [
    "\\btypescript\\b"
+  ],
+  "uipath": [
+   "\\bui\\s?path\\b"
+  ],
+  "vb.net": [
+   "\\bvb\\.net\\b"
   ],
   "vector search": [
    "\\bvector search\\b",
    "\\bvector database\\b",
    "\\bvector db\\b"
   ],
+  "vmware": [
+   "\\bvmware\\b",
+   "\\bnutanix\\b"
+  ],
   "vue": [
    "\\bvue(?:\\.js)?\\b"
   ],
+  "vulnerability management": [
+   "\\bvulnerability\\s+(?:management|assessment)\\b"
+  ],
   "websockets": [
    "\\bwebsockets?\\b"
+  ],
+  "workday": [
+   "\\bworkday\\b"
   ]
  },
  "stacks": [

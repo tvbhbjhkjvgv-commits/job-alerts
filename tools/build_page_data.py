@@ -53,7 +53,11 @@ ROLES = [
 
 
 def page_data() -> dict:
-    skills = {**core.EXTRA_SKILL_PATTERNS, **core.SKILL_PATTERNS}
+    # The vocabulary a candidate's run uses: the built-in skills, widened and added to by the extra ones.
+    skills = {
+        name: tuple(dict.fromkeys(core.SKILL_PATTERNS.get(name, ()) + core.EXTRA_SKILL_PATTERNS.get(name, ())))
+        for name in {*core.SKILL_PATTERNS, *core.EXTRA_SKILL_PATTERNS}
+    }
     return {
         "skills": {name: list(skills[name]) for name in sorted(skills)},
         "stacks": core.avoidable_stacks(),

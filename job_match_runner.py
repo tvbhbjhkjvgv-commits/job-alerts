@@ -1135,6 +1135,13 @@ def _normalise_experience_text(text: str) -> str:
     t = re.sub(r"\by\.?o\.?e\b\.?", "yoe", t)
     t = _TENS_UNITS_RE.sub(lambda m: str(_NUMBER_WORDS[m.group(1)] + _NUMBER_WORDS[m.group(2)]), t)
     t = _NUMBER_WORD_RE.sub(lambda m: str(_NUMBER_WORDS[m.group(1)]), t)
+    # "two (2) years" has by now become "2 (2) years": the figure repeated in brackets is said once.
+    t = re.sub(r"\b(\d+(?:\.\d+)?)\s*\(\s*\1\s*\)", r"\1", t)
+    # "years of experience - 2", "years of experience: 3+": the label carries the unit, the figure stands alone.
+    t = re.sub(
+        r"\b(?:years?|yrs?)\s+of\s+(?:experience|exp)\s*[:\-]\s*(\d+(?:\.\d+)?\+?)(?=\s*(?:$|[\n,;)]|\.(?:\s|$)))",
+        r"experience: \1 years", t, flags=re.M,
+    )
     # "at least a year" -> "at least 1 year", "a couple of years" -> "2 years", "fresher to 3 years" -> "0 to 3 years"
     t = re.sub(
         r"\b((?:at least|atleast|minimum of|minimum|min|more than|over|up to|upto|less than|under) )an? (?=(?:year|yr)\b)",
@@ -3429,6 +3436,77 @@ EXTRA_SKILL_PATTERNS: Dict[str, Tuple[str, ...]] = {
     "sap hana": (r"\bhana\b",),
     "data structures": (r"\bdata\s+structures\b", r"\bdsa\b"),
     "system design": (r"\bsystem\s+design\b",),
+    # Added after measuring the vocabulary against the skills real postings name (Infosys' and
+    # Accenture's own skill lists): these were the most-named ones it did not recognise.
+    "node.js": (r"\bnode(?:\.?js)?\b",),
+    "angular": (r"\bangular(?:\.?js)?\d*\b",),
+    "mlops": (r"\bml\s?ops\b", r"\bmachine\s+learning\s+operations\b"),
+    "llmops": (r"\bllm\s?ops\b", r"\bagent\s?ops\b"),
+    "data science": (r"\bdata\s+scien(?:ce|tist)\b",),
+    "data engineering": (r"\bdata\s+engineer(?:ing)?\b",),
+    "data analytics": (r"\bdata\s+analy(?:tics|sis|st)\b",),
+    "data governance": (r"\bdata\s+governance\b",),
+    "data quality": (r"\bdata\s+quality\b",),
+    "data warehousing": (r"\bdata\s+warehous(?:e|ing)\b", r"\bdwh\b"),
+    "big data": (r"\bbig\s+data\b",),
+    "hive": (r"\bhive\b",),
+    "informatica": (r"\binformatica\b", r"\biics\b"),
+    "datastage": (r"\bdata\s?stage\b",),
+    "ab initio": (r"\bab\s+initio\b",),
+    "alteryx": (r"\balteryx\b",),
+    "qlik": (r"\bqlik\s?(?:sense|view|replicate)?\b",),
+    "microstrategy": (r"\bmicrostrategy\b",),
+    "looker": (r"\blooker\b",),
+    "sas": (r"\bsas\b(?!\s*(?:url|token))",),
+    "ssis": (r"\bssis\b", r"\bssrs\b", r"\bssas\b"),
+    "teradata": (r"\bteradata\b",),
+    "dbt": (r"\bdbt\b", r"\bdata\s+build\s+tool\b"),
+    "microsoft fabric": (r"\bmicrosoft\s+fabric\b", r"\bms\s+fabric\b"),
+    "palantir foundry": (r"\bpalantir\b",),
+    "power query": (r"\bpower\s+query\b",),
+    "power automate": (r"\bpower\s+automate\b",),
+    "power apps": (r"\bpower\s?apps\b", r"\bpower\s+platform\b"),
+    "matplotlib": (r"\bmatplotlib\b", r"\bseaborn\b"),
+    "streamlit": (r"\bstreamlit\b",),
+    "aws glue": (r"\b(?:aws\s+)?glue\b",),
+    "aws lambda": (r"\b(?:aws\s+)?lambda\b",),
+    "tosca": (r"\btosca\b",),
+    "loadrunner": (r"\bload\s?runner\b",),
+    "sast": (r"\bsast\b", r"\bdast\b", r"\bstatic\s+application\s+security\s+testing\b"),
+    "penetration testing": (r"\bpen(?:etration)?\s+test(?:ing|er)?\b", r"\bvapt\b"),
+    "vulnerability management": (r"\bvulnerability\s+(?:management|assessment)\b",),
+    "siem": (r"\bsiem\b", r"\bsplunk\b"),
+    "soc": (r"\bsoc\s+(?:analyst|operations|monitoring)\b", r"\bsecurity\s+operations\s+cent(?:er|re)\b"),
+    "iam": (r"\biam\b", r"\bidentity\s+(?:and\s+)?access\s+management\b", r"\bsailpoint\b", r"\bcyberark\b", r"\bokta\b"),
+    "active directory": (r"\bactive\s+directory\b", r"\bentra\s+id\b", r"\bazure\s+ad\b"),
+    "sre": (r"\bsre\b", r"\bsite\s+reliability\b"),
+    "dynatrace": (r"\bdynatrace\b",),
+    "vmware": (r"\bvmware\b", r"\bnutanix\b"),
+    "sccm": (r"\bsccm\b", r"\bintune\b"),
+    "office 365": (r"\b(?:office|microsoft|m)\s?365\b",),
+    "cisco": (r"\bcisco\b", r"\bccna\b", r"\bccnp\b"),
+    "uipath": (r"\bui\s?path\b",),
+    "automation anywhere": (r"\bautomation\s+anywhere\b",),
+    "pega": (r"\bpega\b",),
+    "workday": (r"\bworkday\b",),
+    "aem": (r"\baem\b", r"\badobe\s+experience\s+manager\b"),
+    "sitecore": (r"\bsitecore\b",),
+    "liferay": (r"\bliferay\b",),
+    "camunda": (r"\bcamunda\b",),
+    "mdm": (r"\bmdm\b", r"\bmaster\s+data\s+management\b"),
+    "plm": (r"\bplm\b", r"\bteamcenter\b", r"\bwindchill\b"),
+    "autocad": (r"\bauto\s?cad\b",),
+    "catia": (r"\bcatia\b",),
+    "solidworks": (r"\bsolid\s?works\b",),
+    "rtos": (r"\brtos\b",),
+    "iot": (r"\biot\b", r"\binternet\s+of\s+things\b"),
+    "blockchain": (r"\bblockchain\b", r"\bsolidity\b", r"\bethereum\b"),
+    "vb.net": (r"\bvb\.net\b",),
+    "scrum": (r"\bscrum\b",),  # not "agile": nearly every posting says it, and it would count against everyone
+    "project management": (r"\bproject\s+management\b", r"\bpmp\b"),
+    "itil": (r"\bitil\b",),
+    "responsible ai": (r"\b(?:responsible|ethical|explainable)\s+ai\b",),
+    "conversational ai": (r"\bconversational\s+ai\b", r"\bdialog\s?flow\b", r"\bchatbots?\b"),
 }
 
 _ROLE_NOUN = r"(?:developer|engineer|programmer|development|engineering|sde|swe)"
@@ -3710,7 +3788,8 @@ def apply_profile(raw: Dict[str, Any]) -> Dict[str, Any]:
 
     # Skills: the wider vocabulary, plus anything typed by hand as its own words.
     for name, patterns in EXTRA_SKILL_PATTERNS.items():
-        SKILL_PATTERNS.setdefault(name, patterns)
+        # A wider spelling of a built-in skill ("NodeJS" beside "Node.js") is added to it, not swapped for it.
+        SKILL_PATTERNS[name] = tuple(dict.fromkeys(SKILL_PATTERNS.get(name, ()) + patterns))
     for skill in profile["skills"] + profile["must_have"]:
         SKILL_PATTERNS.setdefault(skill, (_literal_pattern(skill),))
     CANDIDATE_SKILLS = set(profile["skills"])
