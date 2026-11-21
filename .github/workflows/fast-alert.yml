@@ -1,0 +1,166 @@
+name: Fast Alert
+
+# The fast alert, for every candidate who has it switched on: each candidate's chosen city is searched
+# on LinkedIn every few minutes, and a new opening is sent at once when it is full-time, one of the
+# candidate's roles, at the candidate's skill match or more, and asks for experience that includes the
+# candidate's years.
+#
+# Each run watches for WATCH_MINUTES and then starts the next run, so the watch is continuous.
+# timer-watchdog.yml restarts it if the chain ever stops.
+# To stop it: Actions -> Fast Alert -> "..." -> Disable workflow, then cancel the running run.
+
+on:
+  workflow_dispatch:
+    inputs:
+      only:
+        description: 'Optional candidate ids, comma-separated; empty = every candidate with the fast alert on'
+        required: false
+        default: ''
+      watch_minutes:
+        description: 'Minutes this run keeps scanning (0 = scan once). Later runs go back to 25.'
+        required: false
+        default: '25'
+      keep_running:
+        description: 'Start the next run when this one ends'
+        type: boolean
+        required: false
+        default: true
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: fast-alert
+  cancel-in-progress: false
+
+env:
+  DATA_REPO: ${{ github.repository_owner }}/${{ vars.DATA_REPO || 'job-alerts-data' }}
+  WATCH_MINUTES: ${{ inputs.watch_minutes || '25' }}
+  INTERVAL_MINUTES: '5'
+  STATE_FILE: data/hyderabad_alert_state.json
+
+jobs:
+  candidates:
+    name: List candidates
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      watches: ${{ steps.list.outputs.fast }}
+      count: ${{ steps.list.outputs.fast_count }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Check out the candidates' settings
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.DATA_REPO }}
+          ssh-key: ${{ secrets.DATA_REPO_KEY }}
+          path: candidates-data
+
+      - name: List the candidates
+        id: list
+        env:
+          INPUT_ONLY: ${{ inputs.only }}
+        run: python3 tools/matrix.py candidates-data --only "$INPUT_ONLY" >> "$GITHUB_OUTPUT"
+
+  watch:
+    name: Watch ${{ matrix.id }}
+    needs: candidates
+    if: ${{ needs.candidates.outputs.count != '0' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.candidates.outputs.watches) }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Check out the candidates' settings
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.DATA_REPO }}
+          ssh-key: ${{ secrets.DATA_REPO_KEY }}
+          path: candidates-data
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      # What this candidate has already been alerted about, handed from run to run.
+      - name: Restore alert history
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.STATE_FILE }}
+          key: fast-v1-${{ matrix.id }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            fast-v1-${{ matrix.id }}-
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && pip install -r requirements.txt
+
+      - name: Scan the candidate's city every few minutes and alert
+        timeout-minutes: 42
+        env:
+          LINKEDIN_PROXY: ${{ secrets.LINKEDIN_PROXY }}
+          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          CANDIDATE_PROFILE: candidates-data/candidates/${{ matrix.id }}.json
+        run: |
+          python job_match_runner.py --fast-alert --source guest --hours 1 \
+            --watch-minutes "$WATCH_MINUTES" --interval-minutes "$INTERVAL_MINUTES"
+
+      - name: Save alert history
+        if: always() && hashFiles('data/hyderabad_alert_state.json') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.STATE_FILE }}
+          key: fast-v1-${{ matrix.id }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+  next:
+    name: Start the next run
+    needs: [candidates, watch]
+    # Also when nobody has the fast alert on yet: the chain keeps turning, so a candidate added later is picked up.
+    if: ${{ always() && inputs.keep_running != false }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Wait when there was nobody to watch
+        if: ${{ needs.candidates.outputs.count == '0' || needs.candidates.result != 'success' }}
+        run: sleep 1200
+
+      - name: Start the next run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          REF: ${{ github.ref_name }}
+          RUN_ID: ${{ github.run_id }}
+          THIS_WORKFLOW: fast-alert.yml
+        run: |
+          newer() {
+            gh api "repos/$REPO/actions/workflows/$THIS_WORKFLOW/runs?per_page=30" \
+              --jq "[.workflow_runs[] | select(.id > $RUN_ID and .status != \"completed\")] | length" || echo 0
+          }
+          for attempt in 1 2 3 4 5; do
+            if [ "$(newer)" -gt 0 ]; then
+              echo "The next run is waiting."
+              exit 0
+            fi
+            gh workflow run "$THIS_WORKFLOW" --repo "$REPO" --ref "$REF" || true
+            for check in 1 2 3 4 5 6; do
+              sleep 5
+              if [ "$(newer)" -gt 0 ]; then
+                echo "The next run is waiting."
+                exit 0
+              fi
+            done
+            echo "Attempt $attempt: next run not visible yet; starting it again."
+          done
+          echo "::error::Could not start the next run. The watchdog will restart the chain."
+          exit 1

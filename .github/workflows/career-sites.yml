@@ -1,0 +1,135 @@
+name: Career Sites
+
+# Reads the companies' own career sites (see PORTALS in company_portals.py) once for every candidate
+# and mails each new opening once.
+#
+# A mail goes out when a new opening is in one of the candidate's cities (or remote in India, when the
+# candidate allows it), is one of the candidate's roles, is full-time, and asks for experience that
+# includes the candidate's years (table 1). A posting that states no years is listed apart, in
+# table 2, and only at the candidate's skill match or more.
+#
+# hourly-timer.yml starts this once an hour, after it has started the LinkedIn report.
+# To start it by hand: Actions -> Career Sites -> Run workflow ("dry_run" sends nothing).
+
+on:
+  workflow_dispatch:
+    inputs:
+      only:
+        description: 'Optional candidate ids, comma-separated; empty = every enabled candidate'
+        required: false
+        default: ''
+      companies:
+        description: 'Optional comma-separated sites (ntt, amazon, cognizant, tiger, infor, jpmc, capgemini, ltim, ey, techm, wipro, infosys, accenture); empty = each candidate''s own list'
+        required: false
+        default: ''
+      dry_run:
+        description: 'Scan and log only: send nothing, remember nothing'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+# One scan at a time; a second one waits, so the same opening is never mailed twice.
+concurrency:
+  group: career-sites
+  cancel-in-progress: false
+
+env:
+  DATA_REPO: ${{ github.repository_owner }}/${{ vars.DATA_REPO || 'job-alerts-data' }}
+  STATE_FILE: data/company_portal_state.json
+
+jobs:
+  candidates:
+    name: List candidates
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      scans: ${{ steps.list.outputs.sites }}
+      count: ${{ steps.list.outputs.sites_count }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Check out the candidates' settings
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.DATA_REPO }}
+          ssh-key: ${{ secrets.DATA_REPO_KEY }}
+          path: candidates-data
+
+      - name: List the candidates
+        id: list
+        env:
+          INPUT_ONLY: ${{ inputs.only }}
+        run: python3 tools/matrix.py candidates-data --only "$INPUT_ONLY" >> "$GITHUB_OUTPUT"
+
+  scan:
+    name: Scan ${{ matrix.id }}
+    needs: candidates
+    if: ${{ needs.candidates.outputs.count != '0' }}
+    runs-on: ubuntu-latest
+    # Thirteen sites, each allowed 4 minutes at most (SITE_BUDGET_SECONDS); a usual run takes about 3.
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        include: ${{ fromJSON(needs.candidates.outputs.scans) }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Check out the candidates' settings
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.DATA_REPO }}
+          ssh-key: ${{ secrets.DATA_REPO_KEY }}
+          path: candidates-data
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      # What was already judged and already mailed for this candidate, handed from run to run.
+      - name: Restore scan history
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.STATE_FILE }}
+          key: sites-v1-${{ matrix.id }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            sites-v1-${{ matrix.id }}-
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && pip install -r requirements.txt
+
+      - name: Scan the career sites and mail what is new
+        timeout-minutes: 54
+        env:
+          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          CANDIDATE_PROFILE: candidates-data/candidates/${{ matrix.id }}.json
+          # Inputs go through the environment, not straight into the script text.
+          INPUT_COMPANIES: ${{ inputs.companies }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          ARGS=()
+          if [ -n "$INPUT_COMPANIES" ]; then
+            ARGS+=(--companies "$INPUT_COMPANIES")
+          fi
+          if [ "$INPUT_DRY_RUN" = "true" ]; then
+            ARGS+=(--dry-run)
+          fi
+          python company_portals.py "${ARGS[@]}"
+
+      - name: Save scan history
+        # Also after a failed scan, so an opening that was mailed is never mailed twice.
+        if: ${{ !cancelled() && hashFiles('data/company_portal_state.json') != '' }}
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.STATE_FILE }}
+          key: sites-v1-${{ matrix.id }}-${{ github.run_id }}-${{ github.run_attempt }}

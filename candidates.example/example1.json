@@ -1,0 +1,19 @@
+{
+  "id": "example1",
+  "name": "Example Person",
+  "emails": ["person@example.com"],
+  "ntfy_topic": "",
+  "enabled": true,
+  "experience_years": 2,
+  "roles": ["Python Developer", "Backend Developer", "AI Engineer"],
+  "exclude_title_words": [],
+  "skills": ["python", "django", "fastapi", "rest api", "postgresql", "docker", "git"],
+  "must_have": ["python"],
+  "python_rules": true,
+  "avoid_stacks": [],
+  "cities": ["Hyderabad", "Bengaluru"],
+  "remote_india": true,
+  "linkedin": {"enabled": true, "min_match": 60, "mail_every_run": false},
+  "fast_alert": {"enabled": true, "city": "Hyderabad", "min_match": 70},
+  "career_sites": {"enabled": true, "min_match": 60, "companies": []}
+}

@@ -1,0 +1,104 @@
+name: Timer Watchdog
+
+# Safety net for hourly-timer.yml. If the timer chain has stopped (for example
+# after a GitHub outage), this starts the LinkedIn report once and restarts the
+# chain. While the chain is healthy it does nothing.
+# It does the same for hyderabad-fast-alert.yml, which also keeps itself running.
+#
+# GitHub's `schedule` event is best-effort, so this may fire late or skip
+# slots - that is fine, it only has to notice a broken chain eventually.
+# Run it manually ("Run workflow") to start the chain right away.
+
+on:
+  schedule:
+    - cron: '11,41 * * * *'
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+concurrency:
+  group: timer-watchdog
+  cancel-in-progress: false
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  REPO: ${{ github.repository }}
+  REF: ${{ github.ref_name }}
+  MONITOR_WORKFLOW: linkedin-hourly.yml
+  TIMER_WORKFLOW: hourly-timer.yml
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Restart the timer chain if it stopped
+        run: |
+          # A healthy chain always has one unfinished Hourly Timer run that is
+          # at most ~1 hour old. Older unfinished runs are treated as stuck.
+          cutoff=$(date -u -d '90 minutes ago' +%Y-%m-%dT%H:%M:%SZ)
+          alive() {
+            gh api "repos/$REPO/actions/workflows/$TIMER_WORKFLOW/runs?per_page=30" \
+              --jq "[.workflow_runs[] | select(.status != \"completed\" and .created_at > \"$cutoff\")] | length"
+          }
+
+          count=$(alive) || { echo "Could not read the run list; checking again at the next slot."; exit 0; }
+          if [ "$count" -gt 0 ]; then
+            echo "Timer chain is running. Nothing to do."
+            exit 0
+          fi
+
+          echo "::warning::Timer chain is not running. Starting the monitor and restarting the chain."
+          gh workflow run "$MONITOR_WORKFLOW" --repo "$REPO" --ref "$REF" -f hours=1 || true
+
+          for attempt in 1 2 3 4 5; do
+            gh workflow run "$TIMER_WORKFLOW" --repo "$REPO" --ref "$REF" || true
+            for check in 1 2 3 4 5 6; do
+              sleep 10
+              if [ "$(alive || echo 0)" -gt 0 ]; then
+                echo "Timer chain restarted."
+                exit 0
+              fi
+            done
+            echo "Attempt $attempt: chain not visible yet; dispatching again."
+          done
+          echo "::error::Could not restart the timer chain."
+          exit 1
+
+      - name: Restart the fast alert if it stopped
+        # hyderabad-fast-alert.yml keeps itself going: each run starts the next. A healthy chain
+        # always has one unfinished run that is at most ~50 minutes old.
+        if: always()
+        env:
+          FAST_WORKFLOW: fast-alert.yml
+        run: |
+          state=$(gh api "repos/$REPO/actions/workflows/$FAST_WORKFLOW" --jq .state) || { echo "Could not read the workflow; checking again at the next slot."; exit 0; }
+          if [ "$state" != "active" ]; then
+            echo "Fast Alert is switched off ($state). Leaving it alone."
+            exit 0
+          fi
+          cutoff=$(date -u -d '75 minutes ago' +%Y-%m-%dT%H:%M:%SZ)
+          alive() {
+            gh api "repos/$REPO/actions/workflows/$FAST_WORKFLOW/runs?per_page=30" \
+              --jq "[.workflow_runs[] | select(.status != \"completed\" and .created_at > \"$cutoff\")] | length"
+          }
+          count=$(alive) || { echo "Could not read the run list; checking again at the next slot."; exit 0; }
+          if [ "$count" -gt 0 ]; then
+            echo "Fast Alert is running. Nothing to do."
+            exit 0
+          fi
+          echo "::warning::Fast Alert is not running. Starting it."
+          for attempt in 1 2 3 4 5; do
+            gh workflow run "$FAST_WORKFLOW" --repo "$REPO" --ref "$REF" || true
+            for check in 1 2 3 4 5 6; do
+              sleep 10
+              if [ "$(alive || echo 0)" -gt 0 ]; then
+                echo "Fast Alert restarted."
+                exit 0
+              fi
+            done
+            echo "Attempt $attempt: run not visible yet; dispatching again."
+          done
+          echo "::error::Could not restart the Fast Alert."
+          exit 1

@@ -1,0 +1,362 @@
+[
+  {
+    "id": "global-01",
+    "agree": true,
+    "audit_min": 5,
+    "audit_max": null,
+    "audit_eligible": false,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "global-02",
+    "agree": true,
+    "audit_min": 2,
+    "audit_max": null,
+    "audit_eligible": true,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "global-03",
+    "agree": true,
+    "audit_min": 3,
+    "audit_max": null,
+    "audit_eligible": false,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "global-04",
+    "agree": true,
+    "audit_min": 1,
+    "audit_max": null,
+    "audit_eligible": true,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "global-05",
+    "agree": true,
+    "audit_min": 2,
+    "audit_max": null,
+    "audit_eligible": true,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "global-06",
+    "agree": true,
+    "audit_min": 4,
+    "audit_max": null,
+    "audit_eligible": false,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "global-07",
+    "agree": true,
+    "audit_min": 4,
+    "audit_max": null,
+    "audit_eligible": false,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "global-08",
+    "agree": true,
+    "audit_min": 4,
+    "audit_max": null,
+    "audit_eligible": false,
+    "ambiguous": true,
+    "note": "Ambiguous: the degree-tied 4+ years is for a Master's and there is no Bachelor's tier, while a separate required 3+ years also exists, so 3 or 4 could bind; both readings are not eligible."
+  },
+  {
+    "id": "global-09",
+    "agree": true,
+    "audit_min": 1,
+    "audit_max": null,
+    "audit_eligible": true,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "global-10",
+    "agree": true,
+    "audit_min": 3,
+    "audit_max": null,
+    "audit_eligible": false,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "global-11",
+    "agree": true,
+    "audit_min": 8,
+    "audit_max": null,
+    "audit_eligible": false,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "global-12",
+    "agree": true,
+    "audit_min": 3,
+    "audit_max": null,
+    "audit_eligible": false,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "global-13",
+    "agree": true,
+    "audit_min": 3,
+    "audit_max": null,
+    "audit_eligible": false,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "global-14",
+    "agree": true,
+    "audit_min": 3,
+    "audit_max": 5,
+    "audit_eligible": false,
+    "ambiguous": true,
+    "note": "Ambiguous: the header 'Exp: 2 - 5 yrs' (eligible) conflicts with the required '3+ years' in Basic Qualifications (not eligible), so the eligibility itself flips with the reading; best guess is the stricter 3 to 5."
+  },
+  {
+    "id": "global-15",
+    "agree": true,
+    "audit_min": 3,
+    "audit_max": null,
+    "audit_eligible": false,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "global-16",
+    "agree": true,
+    "audit_min": 2,
+    "audit_max": null,
+    "audit_eligible": true,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "global-17",
+    "agree": true,
+    "audit_min": 1.5,
+    "audit_max": null,
+    "audit_eligible": true,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "global-18",
+    "agree": true,
+    "audit_min": 2.5,
+    "audit_max": null,
+    "audit_eligible": false,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "global-19",
+    "agree": true,
+    "audit_min": 1,
+    "audit_max": 3,
+    "audit_eligible": true,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "global-20",
+    "agree": true,
+    "audit_min": 4,
+    "audit_max": null,
+    "audit_eligible": false,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "global-21",
+    "agree": true,
+    "audit_min": 2,
+    "audit_max": null,
+    "audit_eligible": true,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "global-22",
+    "agree": true,
+    "audit_min": 2,
+    "audit_max": null,
+    "audit_eligible": true,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "global-23",
+    "agree": true,
+    "audit_min": 3,
+    "audit_max": null,
+    "audit_eligible": false,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "global-24",
+    "agree": true,
+    "audit_min": 1.5,
+    "audit_max": null,
+    "audit_eligible": true,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "global-25",
+    "agree": true,
+    "audit_min": 2.5,
+    "audit_max": null,
+    "audit_eligible": false,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "global-26",
+    "agree": true,
+    "audit_min": 3,
+    "audit_max": 5,
+    "audit_eligible": false,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "global-27",
+    "agree": true,
+    "audit_min": 0,
+    "audit_max": 2,
+    "audit_eligible": true,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "global-28",
+    "agree": true,
+    "audit_min": null,
+    "audit_max": null,
+    "audit_eligible": true,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "global-29",
+    "agree": true,
+    "audit_min": 2,
+    "audit_max": 4,
+    "audit_eligible": true,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "global-30",
+    "agree": true,
+    "audit_min": 3,
+    "audit_max": null,
+    "audit_eligible": false,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "global-31",
+    "agree": true,
+    "audit_min": 2,
+    "audit_max": null,
+    "audit_eligible": true,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "global-32",
+    "agree": true,
+    "audit_min": 4,
+    "audit_max": null,
+    "audit_eligible": false,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "global-33",
+    "agree": true,
+    "audit_min": 2,
+    "audit_max": null,
+    "audit_eligible": true,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "global-34",
+    "agree": true,
+    "audit_min": 2,
+    "audit_max": null,
+    "audit_eligible": true,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "global-35",
+    "agree": true,
+    "audit_min": 3,
+    "audit_max": null,
+    "audit_eligible": false,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "global-36",
+    "agree": true,
+    "audit_min": 0,
+    "audit_max": 8,
+    "audit_eligible": true,
+    "ambiguous": true,
+    "note": "Ambiguous: three level bands (0-2, 2-5, 5-8) in one multi-opening advert give no single binding range; the 0 to 8 span is a best guess, and every reasonable reading keeps a 2.0-year candidate eligible."
+  },
+  {
+    "id": "global-37",
+    "agree": true,
+    "audit_min": 2,
+    "audit_max": null,
+    "audit_eligible": true,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "global-38",
+    "agree": true,
+    "audit_min": null,
+    "audit_max": 1,
+    "audit_eligible": false,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "global-39",
+    "agree": true,
+    "audit_min": null,
+    "audit_max": 2,
+    "audit_eligible": true,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "global-40",
+    "agree": true,
+    "audit_min": 1,
+    "audit_max": null,
+    "audit_eligible": true,
+    "ambiguous": false,
+    "note": ""
+  }
+]

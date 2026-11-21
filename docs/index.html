@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Job Alerts: candidates</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --text: #1c2330; --muted: #5d6778; --line: #d9dee7;
+    --accent: #1f5fd1; --accent-text: #ffffff; --chip: #e8eefb; --chip-text: #17408f;
+    --ok: #17703a; --bad: #b3261e; --warn-bg: #fff6dd; --warn-line: #e6c45c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151b; --panel: #1b2029; --text: #e7ebf2; --muted: #9aa5b8; --line: #323a49;
+      --accent: #6ea0ff; --accent-text: #0d1320; --chip: #26324a; --chip-text: #c9dafc;
+      --ok: #6fd596; --bad: #ff8a80; --warn-bg: #3a3016; --warn-line: #7d6522;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+  header { padding: 18px 16px 6px; max-width: 1180px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 2px; }
+  h2 { font-size: 16px; margin: 0 0 10px; }
+  h3 { font-size: 14px; margin: 22px 0 8px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  p { margin: 0 0 10px; }
+  .muted { color: var(--muted); font-size: 13px; }
+  main { max-width: 1180px; margin: 0 auto; padding: 10px 16px 60px; display: grid; grid-template-columns: 290px 1fr; gap: 16px; align-items: start; }
+  @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  label { display: block; font-weight: 600; margin: 14px 0 4px; }
+  label.check { display: flex; gap: 8px; align-items: flex-start; font-weight: 400; margin: 6px 0; cursor: pointer; }
+  label.check input { margin-top: 4px; flex: none; }
+  input[type=text], input[type=number], input[type=password], input[type=email], select {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); color: var(--text); font: inherit;
+  }
+  input:focus, select:focus, button:focus-visible, .chips:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button { font: inherit; padding: 8px 14px; border-radius: 7px; border: 1px solid var(--line); background: var(--panel); color: var(--text); cursor: pointer; }
+  button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
+  button.danger { color: var(--bad); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .row > div { flex: 1 1 180px; min-width: 0; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); min-height: 42px; }
+  .chips input { flex: 1 1 140px; min-width: 120px; border: 0; outline: 0; padding: 4px 6px; background: transparent; color: var(--text); font: inherit; }
+  .chip { background: var(--chip); color: var(--chip-text); border-radius: 999px; padding: 2px 4px 2px 10px; display: inline-flex; align-items: center; gap: 2px; font-size: 13px; }
+  .chip button { border: 0; background: transparent; color: inherit; padding: 0 6px; font-size: 15px; line-height: 1; border-radius: 999px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 0 12px; }
+  .drop { border: 2px dashed var(--line); border-radius: 10px; padding: 18px; text-align: center; cursor: pointer; }
+  .drop.over { border-color: var(--accent); background: var(--chip); }
+  .scan { border: 1px solid var(--line); border-radius: 9px; padding: 4px 14px 12px; margin-top: 10px; }
+  .scan > label.check { font-weight: 600; margin-top: 10px; }
+  .note { background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: 8px; padding: 9px 12px; margin: 10px 0; font-size: 13px; }
+  .status { min-height: 22px; font-size: 13px; margin-top: 8px; }
+  .status.ok { color: var(--ok); } .status.bad { color: var(--bad); }
+  ul.people { list-style: none; margin: 10px 0 0; padding: 0; }
+  ul.people li button { width: 100%; text-align: left; border: 0; border-radius: 7px; padding: 8px 10px; display: flex; justify-content: space-between; gap: 8px; }
+  ul.people li button.current { background: var(--chip); color: var(--chip-text); }
+  ul.people small { color: var(--muted); }
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 22px; align-items: center; }
+  details summary { cursor: pointer; font-weight: 600; }
+  code { font-size: 13px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Job Alerts: candidates</h1>
+  <p class="muted">Add a person, drop in their resume, tick the alerts they should get, and save. Resumes are read in this browser only and are not uploaded anywhere; only the settings on this page are saved.</p>
+</header>
+
+<main>
+  <aside>
+    <div class="panel">
+      <details id="connection">
+        <summary>Connection</summary>
+        <label for="repo">Settings repository</label>
+        <input type="text" id="repo" placeholder="owner/job-alerts-data" autocomplete="off" spellcheck="false">
+        <label for="token">GitHub token</label>
+        <input type="password" id="token" placeholder="github_pat_..." autocomplete="off">
+        <p class="muted" style="margin-top:6px">A fine-grained token with <b>Contents: read and write</b> on the settings repository only. It is kept in this browser.</p>
+        <div class="actions" style="margin-top:10px">
+          <button class="primary" id="connect">Connect</button>
+          <button id="forget">Forget token</button>
+        </div>
+      </details>
+      <div class="status" id="connection-status" role="status"></div>
+    </div>
+
+    <div class="panel" style="margin-top:16px">
+      <h2>People</h2>
+      <button class="primary" id="add" style="width:100%">+ Add a candidate</button>
+      <ul class="people" id="people"></ul>
+      <p class="muted" id="people-empty">Nobody yet.</p>
+    </div>
+  </aside>
+
+  <section class="panel" id="editor">
+    <h2 id="editor-title">New candidate</h2>
+
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose a resume file">
+      <b>Drop a resume here</b>, or click to choose a file (PDF, DOCX or TXT).<br>
+      <span class="muted">It fills in the name, email, skills, roles and years below. Check them before saving.</span>
+      <input type="file" id="file" accept=".pdf,.docx,.txt,application/pdf,text/plain" hidden>
+    </div>
+    <div class="status" id="resume-status" role="status"></div>
+
+    <h3>Who</h3>
+    <div class="row">
+      <div><label for="name">Name</label><input type="text" id="name" autocomplete="off"></div>
+      <div><label for="years">Years of experience</label><input type="number" id="years" min="0" max="50" step="0.5">
+        <div class="muted" id="years-hint"></div></div>
+    </div>
+    <label>Email addresses that get the alerts</label>
+    <div class="chips" data-field="emails" data-placeholder="name@example.com"></div>
+    <label class="check"><input type="checkbox" id="enabled" checked> <span><b>Active.</b> Untick to pause every alert for this person without deleting them.</span></label>
+
+    <h3>What jobs</h3>
+    <label>Roles (job titles to look for)</label>
+    <div class="chips" data-field="roles" data-placeholder="Python Developer" data-list="role-list"></div>
+    <p class="muted">A job is kept when its title has every word of one role: "Java Developer" also finds "Senior Java Backend Engineer".</p>
+
+    <label>Skills</label>
+    <div class="chips" data-field="skills" data-placeholder="python" data-list="skill-list" data-lower="1"></div>
+    <p class="muted">The match percentage is how many of a posting's skills are in this list.</p>
+
+    <label>Must-have skills <span class="muted">(optional)</span></label>
+    <div class="chips" data-field="must_have" data-placeholder="python" data-list="skill-list" data-lower="1"></div>
+    <p class="muted">When filled in, a posting that names none of these is dropped.</p>
+
+    <label class="check"><input type="checkbox" id="python_rules"> <span><b>Python developer rules.</b> For Python and GenAI developers only: also drops jobs that mention Python but are really Java, .NET, Node, data-engineering or DevOps jobs.</span></label>
+
+    <label>Job families to leave out</label>
+    <div class="grid" id="stacks"></div>
+    <p class="muted" id="stacks-note"></p>
+
+    <label>Words that rule a title out <span class="muted">(optional)</span></label>
+    <div class="chips" data-field="exclude_title_words" data-placeholder="support"></div>
+
+    <h3>Where</h3>
+    <label>Cities</label>
+    <div class="chips" data-field="cities" data-placeholder="Hyderabad" data-list="city-list"></div>
+    <label class="check"><input type="checkbox" id="remote_india" checked> <span>Also remote jobs open to people in India</span></label>
+
+    <h3>Which alerts</h3>
+    <div class="scan">
+      <label class="check"><input type="checkbox" id="linkedin_enabled" checked> <span>LinkedIn, every hour</span></label>
+      <p class="muted">New LinkedIn postings from the last hour, in the cities above, mailed when one reaches the match below.</p>
+      <div class="row">
+        <div><label for="linkedin_min">Skill match needed (%)</label><input type="number" id="linkedin_min" min="0" max="100" step="5"></div>
+        <div></div>
+      </div>
+      <label class="check"><input type="checkbox" id="linkedin_every"> <span>Mail every hour, also when nothing new matched (a status mail)</span></label>
+    </div>
+
+    <div class="scan">
+      <label class="check"><input type="checkbox" id="fast_enabled" checked> <span>Fast alert for one city, every few minutes</span></label>
+      <p class="muted">One city is searched every 5 minutes; a new opening that fits is sent at once, so the person can apply early.</p>
+      <div class="row">
+        <div><label for="fast_city">City</label><select id="fast_city"></select></div>
+        <div><label for="fast_min">Skill match needed (%)</label><input type="number" id="fast_min" min="0" max="100" step="5"></div>
+      </div>
+    </div>
+
+    <div class="scan">
+      <label class="check"><input type="checkbox" id="sites_enabled" checked> <span>Company career pages, every hour</span></label>
+      <p class="muted">New openings read from the companies' own career sites. A posting whose stated years leave the person out is never sent.</p>
+      <div class="row">
+        <div><label for="sites_min">Skill match needed when a posting states no years (%)</label><input type="number" id="sites_min" min="0" max="100" step="5"></div>
+        <div></div>
+      </div>
+      <label>Companies <span class="muted">(none ticked = all of them)</span></label>
+      <div class="grid" id="companies"></div>
+    </div>
+
+    <label for="ntfy">Phone push topic <span class="muted">(optional, ntfy.sh)</span></label>
+    <input type="text" id="ntfy" autocomplete="off" spellcheck="false" placeholder="a-long-random-topic-name">
+
+    <div class="actions">
+      <button class="primary" id="save">Save</button>
+      <button id="download">Download the file</button>
+      <button class="danger" id="delete" hidden>Delete this candidate</button>
+      <span class="muted" id="candidate-id"></span>
+    </div>
+    <div class="status" id="save-status" role="status"></div>
+  </section>
+</main>
+
+<datalist id="skill-list"></datalist>
+<datalist id="role-list"></datalist>
+<datalist id="city-list"></datalist>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js" defer></script>
+<script src="data.js" defer></script>
+<script src="parse.js" defer></script>
+<script src="app.js" defer></script>
+</body>
+</html>

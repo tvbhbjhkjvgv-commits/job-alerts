@@ -1,0 +1,362 @@
+[
+  {
+    "id": "india-01",
+    "agree": true,
+    "audit_min": 3,
+    "audit_max": 5,
+    "audit_eligible": false,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "india-02",
+    "agree": true,
+    "audit_min": 2,
+    "audit_max": 4,
+    "audit_eligible": true,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "india-03",
+    "agree": true,
+    "audit_min": 2,
+    "audit_max": null,
+    "audit_eligible": true,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "india-04",
+    "agree": true,
+    "audit_min": 5,
+    "audit_max": null,
+    "audit_eligible": false,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "india-05",
+    "agree": true,
+    "audit_min": 3,
+    "audit_max": null,
+    "audit_eligible": false,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "india-06",
+    "agree": true,
+    "audit_min": 0,
+    "audit_max": 2,
+    "audit_eligible": true,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "india-07",
+    "agree": true,
+    "audit_min": 4,
+    "audit_max": 6,
+    "audit_eligible": false,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "india-08",
+    "agree": true,
+    "audit_min": 2,
+    "audit_max": 3,
+    "audit_eligible": true,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "india-09",
+    "agree": true,
+    "audit_min": 3,
+    "audit_max": null,
+    "audit_eligible": false,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "india-10",
+    "agree": true,
+    "audit_min": 2,
+    "audit_max": 5,
+    "audit_eligible": true,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "india-11",
+    "agree": true,
+    "audit_min": 1,
+    "audit_max": 3,
+    "audit_eligible": true,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "india-12",
+    "agree": true,
+    "audit_min": 0,
+    "audit_max": 1,
+    "audit_eligible": false,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "india-13",
+    "agree": true,
+    "audit_min": 3,
+    "audit_max": 6,
+    "audit_eligible": false,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "india-14",
+    "agree": true,
+    "audit_min": 2,
+    "audit_max": 4,
+    "audit_eligible": true,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "india-15",
+    "agree": true,
+    "audit_min": 3,
+    "audit_max": 5,
+    "audit_eligible": false,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "india-16",
+    "agree": true,
+    "audit_min": 1,
+    "audit_max": null,
+    "audit_eligible": true,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "india-17",
+    "agree": true,
+    "audit_min": 1.5,
+    "audit_max": null,
+    "audit_eligible": true,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "india-18",
+    "agree": true,
+    "audit_min": 2.5,
+    "audit_max": null,
+    "audit_eligible": false,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "india-19",
+    "agree": true,
+    "audit_min": 1,
+    "audit_max": 2.5,
+    "audit_eligible": true,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "india-20",
+    "agree": true,
+    "audit_min": 2.5,
+    "audit_max": 4,
+    "audit_eligible": false,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "india-21",
+    "agree": true,
+    "audit_min": 0,
+    "audit_max": 1.5,
+    "audit_eligible": false,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "india-22",
+    "agree": true,
+    "audit_min": 1.5,
+    "audit_max": null,
+    "audit_eligible": true,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "india-23",
+    "agree": true,
+    "audit_min": 0.5,
+    "audit_max": 1,
+    "audit_eligible": false,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "india-24",
+    "agree": true,
+    "audit_min": null,
+    "audit_max": 2,
+    "audit_eligible": true,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "india-25",
+    "agree": true,
+    "audit_min": null,
+    "audit_max": 1,
+    "audit_eligible": false,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "india-26",
+    "agree": true,
+    "audit_min": 0,
+    "audit_max": 3,
+    "audit_eligible": true,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "india-27",
+    "agree": true,
+    "audit_min": 3,
+    "audit_max": 5,
+    "audit_eligible": false,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "india-28",
+    "agree": true,
+    "audit_min": 2,
+    "audit_max": 5,
+    "audit_eligible": true,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "india-29",
+    "agree": true,
+    "audit_min": 3,
+    "audit_max": null,
+    "audit_eligible": false,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "india-30",
+    "agree": true,
+    "audit_min": 2,
+    "audit_max": null,
+    "audit_eligible": true,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "india-31",
+    "agree": true,
+    "audit_min": null,
+    "audit_max": null,
+    "audit_eligible": true,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "india-32",
+    "agree": true,
+    "audit_min": 1,
+    "audit_max": 2,
+    "audit_eligible": true,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "india-33",
+    "agree": true,
+    "audit_min": 4,
+    "audit_max": null,
+    "audit_eligible": false,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "india-34",
+    "agree": true,
+    "audit_min": 1,
+    "audit_max": 3,
+    "audit_eligible": true,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "india-35",
+    "agree": true,
+    "audit_min": 4,
+    "audit_max": 8,
+    "audit_eligible": false,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "india-36",
+    "agree": true,
+    "audit_min": 2,
+    "audit_max": 6,
+    "audit_eligible": true,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "india-37",
+    "agree": true,
+    "audit_min": 3,
+    "audit_max": null,
+    "audit_eligible": false,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "india-38",
+    "agree": true,
+    "audit_min": 2,
+    "audit_max": null,
+    "audit_eligible": true,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "india-39",
+    "agree": true,
+    "audit_min": 3,
+    "audit_max": null,
+    "audit_eligible": false,
+    "ambiguous": false,
+    "note": ""
+  },
+  {
+    "id": "india-40",
+    "agree": true,
+    "audit_min": 4,
+    "audit_max": 6,
+    "audit_eligible": false,
+    "ambiguous": false,
+    "note": ""
+  }
+]

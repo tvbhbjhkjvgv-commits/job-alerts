@@ -1,0 +1,114 @@
+name: Hourly Timer
+
+# Reliable hourly trigger for the hourly scans ("LinkedIn Hourly" and "Career Sites").
+#
+# GitHub's `schedule` event is best-effort and was dropping most hourly runs,
+# so this workflow keeps time itself. Each run is one link of a chain:
+#   1. the `tick` job waits 55 minutes in the `hourly-timer` environment
+#      (an environment wait timer - no runner is used while waiting),
+#   2. sleeps the last few minutes until minute TARGET_MINUTE (UTC),
+#   3. starts the LinkedIn report and the career-site scan, then starts the next link of the chain.
+#
+# timer-watchdog.yml restarts the chain if it ever stops.
+# To stop the hourly runs: cancel the waiting "Hourly Timer" run and disable
+# the "Timer Watchdog" workflow.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  REPO: ${{ github.repository }}
+  REF: ${{ github.ref_name }}
+  RUN_ID: ${{ github.run_id }}
+  # Minute of the hour (UTC) to start the monitor. 30 UTC = :00 IST.
+  TARGET_MINUTE: '30'
+  MONITOR_WORKFLOW: linkedin-hourly.yml
+  PORTALS_WORKFLOW: career-sites.yml
+  TIMER_WORKFLOW: hourly-timer.yml
+  WATCHDOG_WORKFLOW: timer-watchdog.yml
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    # The 55-minute wait happens here, before the job gets a runner.
+    environment: hourly-timer
+    timeout-minutes: 30
+    steps:
+      - name: Stop if a newer chain link exists
+        id: dedupe
+        run: |
+          # If two chains ever run side by side, only the newest link survives.
+          newer=$(gh api "repos/$REPO/actions/workflows/$TIMER_WORKFLOW/runs?per_page=30" \
+            --jq "[.workflow_runs[] | select(.id > $RUN_ID and .status != \"completed\")] | length" || echo 0)
+          if [ "$newer" -gt 0 ]; then
+            echo "A newer Hourly Timer run is active; this link is a duplicate and stops here."
+            echo "duplicate=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "duplicate=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Wait for the exact minute
+        if: steps.dedupe.outputs.duplicate != 'true'
+        run: |
+          now=$(date -u +%s)
+          target=$((10#$TARGET_MINUTE * 60))
+          since=$(( (now - target) % 3600 ))
+          remaining=$(( 3600 - since ))
+          if [ "$remaining" -le 900 ]; then
+            echo "Sleeping ${remaining}s until minute $TARGET_MINUTE UTC."
+            sleep "$remaining"
+          else
+            echo "Woke up ${since}s after minute $TARGET_MINUTE UTC; starting the monitor now."
+          fi
+
+      - name: Start the LinkedIn report
+        if: steps.dedupe.outputs.duplicate != 'true'
+        run: |
+          for attempt in 1 2 3 4 5; do
+            if gh workflow run "$MONITOR_WORKFLOW" --repo "$REPO" --ref "$REF" -f hours=1; then
+              echo "LinkedIn report started at $(date -u +%H:%M:%S) UTC."
+              exit 0
+            fi
+            echo "Attempt $attempt failed; retrying."
+            sleep $((attempt * 15))
+          done
+          echo "::error::Could not start the LinkedIn report."
+          exit 1
+
+      - name: Start the career-site scan
+        # A second, separate report (career-sites.yml). Whatever happens here, the chain goes on.
+        if: always() && steps.dedupe.outputs.duplicate != 'true'
+        continue-on-error: true
+        run: |
+          gh workflow run "$PORTALS_WORKFLOW" --repo "$REPO" --ref "$REF"             || echo "::warning::Could not start the career-site scan this hour."
+
+      - name: Start the next chain link
+        # Runs even if starting the monitor failed, so the chain never breaks.
+        if: always() && steps.dedupe.outputs.duplicate != 'true'
+        run: |
+          for attempt in 1 2 3 4 5; do
+            gh workflow run "$TIMER_WORKFLOW" --repo "$REPO" --ref "$REF" || true
+            # Confirm the next link really exists before this one ends.
+            for check in 1 2 3 4 5 6; do
+              sleep 10
+              next=$(gh api "repos/$REPO/actions/workflows/$TIMER_WORKFLOW/runs?per_page=30" \
+                --jq "[.workflow_runs[] | select(.id > $RUN_ID and .status != \"completed\")] | length" || echo 0)
+              if [ "$next" -gt 0 ]; then
+                echo "Next chain link is waiting."
+                exit 0
+              fi
+            done
+            echo "Attempt $attempt: next link not visible yet; dispatching again."
+          done
+          echo "::error::Could not start the next chain link. The watchdog will restart the chain."
+          exit 1
+
+      - name: Keep the watchdog enabled
+        # GitHub disables scheduled workflows after 60 days without repository
+        # activity. Re-enabling it every hour prevents that.
+        if: always() && steps.dedupe.outputs.duplicate != 'true'
+        run: gh api -X PUT "repos/$REPO/actions/workflows/$WATCHDOG_WORKFLOW/enable" || true
