@@ -29,19 +29,24 @@ import job_match_runner as core  # noqa: E402
 SEARCH = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
 CITIES = ["Bengaluru", "Hyderabad", "Pune"]
 ROLES = ["Python Developer", "Java Developer", "Data Analyst", "Software Engineer", "QA Engineer", "DevOps Engineer"]
-MAX_REQUESTS = 90
-PAUSE = 1.5
+MAX_REQUESTS = 60
+# The first run asked every 1.5 seconds and was refused at the twelfth request. This one asks slowly,
+# and after a refusal waits once before going on, the way the real search does.
+PAUSE = 5.0
+WAIT_AFTER_REFUSAL = 75.0
+FAMILIES = "developer OR engineer OR programmer OR analyst OR architect OR tester OR devops OR consultant OR administrator"
 IT_TITLE = re.compile(
     r"developer|engineer|programmer|analyst|architect|devops|data|software|sdet|tester|qa\b|cloud|full.?stack|backend|frontend|"
     r"\bai\b|\bml\b|machine learning|python|java|\.net|react|angular|node|sap|salesforce|consultant|administrator|support", re.I)
 
 made = 0
 refused = False
+refusals = 0
 
 
 def page(keywords: str, city: str, seconds: int, start: int):
     """One result page: (status, [(job id, title, place, age text)])."""
-    global made, refused
+    global made, refused, refusals
     if made >= MAX_REQUESTS or refused:
         return 0, []
     url = f"{SEARCH}?keywords={quote_plus(keywords)}&location={quote_plus(city)}&f_TPR=r{seconds}&f_JT=F&sortBy=DD&start={start}"
@@ -52,8 +57,15 @@ def page(keywords: str, city: str, seconds: int, start: int):
         print(f"      request failed: {type(exc).__name__}")
         return -1, []
     time.sleep(PAUSE)
+    if response.status_code in (429, 999, 403):
+        refusals += 1
+        if refusals > 1:
+            refused = True  # refused again after waiting: stop
+            return response.status_code, []
+        print(f"      refused once (HTTP {response.status_code}) after {made} requests; waiting {WAIT_AFTER_REFUSAL:g}s and asking again")
+        time.sleep(WAIT_AFTER_REFUSAL)
+        return page(keywords, city, seconds, start)
     if response.status_code != 200:
-        refused = response.status_code in (429, 999, 403)
         return response.status_code, []
     soup = core.BeautifulSoup(response.text, "html.parser")
     cards = []
@@ -88,32 +100,30 @@ def listing(keywords: str, city: str, seconds: int, max_pages: int):
 
 
 def main() -> int:
-    print(f"LinkedIn probe: {len(CITIES)} cities, at most {MAX_REQUESTS} requests, {PAUSE}s apart.\n")
+    print(f"LinkedIn probe: at most {MAX_REQUESTS} requests, {PAUSE:g}s apart.")
     or_query = " OR ".join(f'"{role}"' for role in ROLES)
-    for city in CITIES:
+    for city in ("Hyderabad", "Bengaluru"):
         if refused:
             break
         print(f"== {city}")
-        everything, pages, statuses, first = listing("", city, 3600, 12)
-        it = [card for card in everything.values() if IT_TITLE.search(card[1])]
-        ages = [card[3] for card in list(everything.values())[-3:]]
-        print(f"   1. no search word, last hour : {len(everything)} postings in {pages} page(s) of {first}; statuses {sorted(set(statuses))}; "
-              f"{len(it)} look like IT jobs; oldest shown: {ages}")
-        merged, pages, statuses, _ = listing(or_query, city, 3600, 8)
-        print(f"   2. six roles joined by OR     : {len(merged)} postings in {pages} page(s); statuses {sorted(set(statuses))}")
-        separate = {}
-        asked = 0
+        merged, pages, statuses, first = listing(or_query, city, 3600, 5)
+        print(f"   A. six roles joined by OR, last hour : {len(merged)} postings in {pages} page(s) of {first}; statuses {sorted(set(statuses))}")
+        print("      titles:", "; ".join(card[1][:34] for card in list(merged.values())[:8]))
+        separate, asked = {}, 0
         for role in ROLES[:3]:
-            found, used, _, _ = listing(role, city, 3600, 2)
+            found, used, _, _ = listing(role, city, 3600, 1)
             asked += used
             separate.update(found)
-        print(f"      three of those roles alone : {len(separate)} postings in {asked} page(s); "
-              f"{len(set(separate) & set(merged))} of them are in the OR search, {len(set(separate) & set(everything))} in the no-word search")
-        short, pages, statuses, _ = listing("", city, 600, 4)
-        print(f"   3. no search word, 10 minutes : {len(short)} postings in {pages} page(s); statuses {sorted(set(statuses))}; "
-              f"ages {sorted({card[3] for card in short.values()})[:6]}")
-        print("      sample titles:", "; ".join(card[1][:38] for card in list(everything.values())[:6]))
-    print(f"\n4. Requests made: {made}. Refused by LinkedIn: {'YES' if refused else 'no'}.")
+        print(f"   B. three of those roles asked alone  : {len(separate)} postings on {asked} first page(s); {len(set(separate) & set(merged))} of them are in A")
+        short, pages, statuses, _ = listing("", city, 600, 3)
+        print(f"   C. no search word, last 10 minutes   : {len(short)} postings in {pages} page(s); statuses {sorted(set(statuses))}; "
+              f"ages {sorted({card[3] for card in short.values()})[:5]}")
+        family, pages, statuses, _ = listing(FAMILIES, city, 600, 3)
+        it = sum(1 for card in family.values() if IT_TITLE.search(card[1]))
+        print(f"   D. nine job words by OR, 10 minutes  : {len(family)} postings in {pages} page(s); statuses {sorted(set(statuses))}; {it} look like IT jobs; "
+              f"{len(set(family) & set(short))} also in C")
+        print("      titles:", "; ".join(card[1][:34] for card in list(family.values())[:8]))
+    print(f"Requests made: {made}. Refusals: {refusals}. Stopped by LinkedIn: {'YES' if refused else 'no'}.")
     return 0
 
 
