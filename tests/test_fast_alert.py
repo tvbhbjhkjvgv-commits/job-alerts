@@ -87,11 +87,10 @@ check("70% is an alert at --fast-min-match 70, not at 80",
       m.fast_alert_class(dict(seventy), min_match=70) == "alert" and m.fast_alert_class(dict(seventy), min_match=80) == "",
       str(m.score_job(dict(seventy))["skill_match_pct"]))
 check("a job at exactly 70% alerts with the default threshold", m.fast_alert_class(dict(seventy)) == "alert", str(m.FAST_ALERT_MIN_MATCH))
-# The workflow passes its own number to --fast-min-match, so it has to agree with the script.
-WORKFLOW = (Path(m.__file__).resolve().parent / ".github" / "workflows" / "hyderabad-fast-alert.yml").read_text(encoding="utf-8")
-check("the workflow uses the same threshold as the script",
-      WORKFLOW.count(f"inputs.min_match || '{m.FAST_ALERT_MIN_MATCH}'") == 2 and f"default: '{m.FAST_ALERT_MIN_MATCH}'" in WORKFLOW,
-      f"script default {m.FAST_ALERT_MIN_MATCH}")
+# The threshold is each candidate's own: the workflow hands over the candidate's file and no number of its own.
+WORKFLOW = (Path(m.__file__).resolve().parent / ".github" / "workflows" / "fast-alert.yml").read_text(encoding="utf-8")
+check("the workflow leaves the threshold to the candidate's file",
+      "--fast-min-match" not in WORKFLOW and "min_match" not in WORKFLOW and "CANDIDATE_PROFILE: candidates-data/candidates/${{ matrix.id }}.json" in WORKFLOW)
 
 check("name: one mode", m.fast_alert_name([{"workplace_type": "Hybrid"}]) == "Hyderabad (Hybrid) jobs apply fast", m.fast_alert_name([{"workplace_type": "Hybrid"}]))
 mixed = m.fast_alert_name([{"workplace_type": m.WORK_MODE_UNKNOWN}, {"workplace_type": "On-site"}, {"workplace_type": "Hybrid"}, {"workplace_type": "On-site"}])

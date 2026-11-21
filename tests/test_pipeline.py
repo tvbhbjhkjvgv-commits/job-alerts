@@ -281,7 +281,7 @@ check("defaults still read 60%", "matching 60% or more" in m.build_email_html([]
 code, sent = run_main([senior], extra_args=["--hours", "3"])
 check("--hours 3: the push says 3 hours, not 1h", sent["push"] and "last 3 hour(s)" in str(sent["push"][0]) and "1h" not in str(sent["push"][0]), str(sent["push"]))
 
-HOURLY = (Path(repo_dir) / ".github" / "workflows" / "hourly-job-monitor.yml").read_text(encoding="utf-8")
+HOURLY = (Path(repo_dir) / ".github" / "workflows" / "linkedin-hourly.yml").read_text(encoding="utf-8")
 save_step = HOURLY.split("- name: Save seen-job history", 1)[1].split("- name:", 1)[0]
 check("hourly workflow: history is saved after a failed run too", "!cancelled()" in save_step and "success()" not in save_step, save_step.strip()[:200])
 
