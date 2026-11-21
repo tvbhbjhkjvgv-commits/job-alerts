@@ -113,6 +113,11 @@ jobs:
           GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           CANDIDATE_PROFILE: candidates-data/candidates/${{ matrix.id }}.json
+          # Optional free AI reader of postings (brain.py); with neither key set the built-in rules are used alone.
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          BRAIN_GEMINI_MODELS: ${{ vars.BRAIN_GEMINI_MODELS }}
+          BRAIN_GROQ_MODELS: ${{ vars.BRAIN_GROQ_MODELS }}
           # Inputs go through the environment, not straight into the script text.
           INPUT_COMPANIES: ${{ inputs.companies }}
           INPUT_DRY_RUN: ${{ inputs.dry_run }}

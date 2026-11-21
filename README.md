@@ -82,9 +82,33 @@ For the welcome mail to go out the moment a candidate is saved, also give the to
 
 To stop everything: disable "Timer Watchdog", then cancel the waiting "Hourly Timer" and "Fast Alert" runs.
 
+### The AI reader (optional, free)
+
+The scans recognise skills from a fixed list of about 220 names. A posting can name any product or tool, so `brain.py` can also have a free AI model read each posting and name the skills it asks for; skills no list has then count towards the match percentage. It is off until a key is set.
+
+To switch it on, create a free key and save it as a secret here (Settings -> Secrets and variables -> Actions):
+
+| Secret | Where the free key comes from | What is known about the free allowance |
+|---|---|---|
+| `GEMINI_API_KEY` | Google AI Studio (aistudio.google.com -> Get API key) | Google does not publish it; it shows the live limits inside AI Studio. Tried first, strongest model first. |
+| `GROQ_API_KEY` | Groq (console.groq.com -> API Keys) | Published: 1,000 requests and 200,000 tokens a day per model, 8,000 tokens a minute. Roughly 130 postings a day per model, three models. |
+
+Then run the **AI Reader Check** workflow: it asks every configured model to read one sample posting and lists which of them answer.
+
+How it behaves:
+
+- **Best model first, then the next.** When a model has used up its free allowance the next one is used; when all are used up the postings left are read by the built-in list alone. A scan never fails or waits long for it (at most two minutes an hour, 40 seconds in a fast-alert pass, 40 postings a run).
+- **Only postings still in the running are sent**: right title, right place, and years that do not already rule the candidate out.
+- **Only the posting's title and text are sent.** Nothing about any candidate is. On Google's free plan, what is sent may be used to improve Google's products; a job posting is public text.
+- **The model is not trusted blindly.** A skill counts only when the posting's own text contains it. The years are still read by the rules; the model's figure is used only where the rules found no figure at all.
+- **Models are retired often.** If a log says a model is no longer served, put the current model names (comma-separated, best first) in the repository variables `BRAIN_GEMINI_MODELS` / `BRAIN_GROQ_MODELS`; no code change is needed.
+
+Expect match percentages to move once it is on: a posting that asks for five tools the list never knew now shows them as missing.
+
 ### Limits to know about
 
-- **GitHub Actions is for the owner and a few friends.** GitHub's terms do not allow running a paid service on it, and a free account runs at most 20 jobs at once. With many candidates the jobs queue; beyond roughly ten to fifteen candidates the hourly scans stop fitting in the hour.
+- **GitHub Actions is for the owner and a few friends.** GitHub's terms do not allow running a paid service on it, and a free account runs at most 20 jobs at once.
+- **About 10 to 12 candidates with all three alerts on.** Each fast alert holds one of the 20 job slots all day; each candidate's hourly work is about 18 minutes of jobs (a search per place at 2 to 7 minutes, a report, a career-site scan). At 12 candidates the hourly work finishes in about half an hour; at 16 it no longer fits in the hour and the runs queue up. With the fast alert off for most people the same account carries more, until LinkedIn starts refusing the searches. These figures are worked out from measured job times, not from a load test.
 - **Each candidate is a separate set of requests** to LinkedIn and to the career sites. The scans are polite (pauses, time limits, and they stop when refused), but the load grows with every candidate.
 - **A resume is not proof.** The page guesses years of experience from the resume's wording and dates and shows both; the saved figure is whatever is in the field.
 

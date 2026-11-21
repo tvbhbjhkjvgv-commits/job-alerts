@@ -1,0 +1,38 @@
+name: AI Reader Check
+
+# Tries every configured free AI model on one sample posting and reports which of them answer.
+# Run it after adding or changing the GEMINI_API_KEY / GROQ_API_KEY secret, or when the scans' logs
+# say a model is no longer served. It sends nothing to anyone and reads no candidate.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Try the models
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && pip install -r requirements.txt
+
+      - name: Ask each model to read a sample posting
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          BRAIN_GEMINI_MODELS: ${{ vars.BRAIN_GEMINI_MODELS }}
+          BRAIN_GROQ_MODELS: ${{ vars.BRAIN_GROQ_MODELS }}
+        run: python brain.py --check

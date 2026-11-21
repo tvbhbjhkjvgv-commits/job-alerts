@@ -8,6 +8,7 @@ on:
     paths:
       - 'job_match_runner.py'
       - 'company_portals.py'
+      - 'brain.py'
       - 'tools/**'
       - 'docs/**'
       - 'requirements.txt'
@@ -53,6 +54,9 @@ jobs:
 
       - name: Candidate profiles and the candidate list
         run: python tests/test_profiles.py
+
+      - name: AI reader of postings (no model is contacted)
+        run: python tests/test_brain.py
 
       - name: Settings page (resume reading)
         run: node tests/test_page.js

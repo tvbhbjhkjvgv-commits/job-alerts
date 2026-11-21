@@ -73,7 +73,7 @@ const developer = Parse.extract(DEVELOPER, DATA, "", TODAY);
 check("a heading that is a job title is not taken for the name", developer.name === "Ravi Teja", developer.name);
 check("a Python developer gets the Python rules and the stated years", developer.pythonRules === true && developer.years === 3
   && developer.roles.includes("Python Developer") && developer.roles.includes("Backend Developer"), JSON.stringify([developer.years, developer.roles]));
-check("with no name in the text the file name is used", Parse.findName("resume\nemail: x@example.com", "Vamsi_Krishna_Resume (1).pdf") === "Vamsi Krishna");
+check("with no name in the text the file name is used", Parse.findName("resume\nemail: x@example.com", "Asha_Rao_Resume (1).pdf") === "Asha Rao");
 check("a resume with no years and no dates leaves the years empty", Parse.findYears("Sales executive. Good communication.", TODAY).years === null);
 
 console.log();

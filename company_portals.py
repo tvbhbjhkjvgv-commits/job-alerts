@@ -757,6 +757,7 @@ def scan_site(key: str, state: Dict[str, Any], args: argparse.Namespace, now_iso
     listing = reader(site)
     summary: Dict[str, Any] = {"listed": len(listing), "new": 0, "waiting": 0, "candidates": [], "reasons": {}}
     pages_left = MAX_DETAIL_PAGES
+    ready: List[Tuple[Dict[str, Any], str]] = []
     for job in listing:
         job_id = job["job_id"]
         fill = job.pop("_detail", None)
@@ -781,6 +782,10 @@ def scan_site(key: str, state: Dict[str, Any], args: argparse.Namespace, now_iso
             summary["waiting"] += 1
             continue
         state["decided"][job_id] = now_iso
+        ready.append((job, early))
+    # The AI reader (when a key is set) reads the postings still in the running, all together, before they are judged.
+    core.read_with_brain([job for job, early in ready if not early], args.candidate_yoe)
+    for job, early in ready:
         kind, reason = ("", early) if early else judge(job, args.candidate_yoe, args.min_match, getattr(args, "stated_min_match", 0))
         summary["reasons"][reason or kind] = summary["reasons"].get(reason or kind, 0) + 1
         if kind:
@@ -856,6 +861,7 @@ def run_scan(args: argparse.Namespace, portals: Any = None, report: Dict[str, An
     report = report or COMPANY_SITES
     stated_min_match = int(getattr(args, "stated_min_match", 0) or 0)
     state = load_state(report["state_file"])
+    core.brain.start_run()
     now_iso = datetime.now(timezone.utc).isoformat()
     notes: List[str] = []
     read_ok: List[str] = []

@@ -19,6 +19,7 @@ import random
 import re
 import smtplib
 import ssl
+import sys
 import time
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
@@ -39,6 +40,11 @@ try:
     HAS_AIOHTTP = True
 except ImportError:
     HAS_AIOHTTP = False
+
+# brain.py lives beside this file; a test that loads this file by its path still has to find it.
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+import brain  # noqa: E402  the optional AI reader of postings (does nothing without a key)
 
 
 LOG = logging.getLogger("job_match_runner")
@@ -887,6 +893,55 @@ def canonical_skill_hits(text: str) -> List[str]:
     return sorted(set(hits))
 
 
+def _add_brain_skills(job: Dict[str, Any], required: Set[str], optional: Set[str], left_out: Set[str]) -> None:
+    """Add the skills the AI model read in the posting (job["brain"]) that the fixed list does not know.
+
+    The list keeps the last word on every skill it found itself, required or optional. A skill only the
+    model names is added under its own name, and only when the posting's text really contains it.
+    """
+    answer = job.get("brain") if isinstance(job.get("brain"), dict) else None
+    if not answer:
+        return
+    text = f"{job.get('title') or ''}\n{job.get('description') or ''}".lower()
+    found = required | optional | left_out
+    has_sql_engine = any(engine in found for engine in SQL_ENGINES)
+    for names, target in ((answer.get("required") or [], required), (answer.get("optional") or [], optional)):
+        for name in names:
+            name = str(name or "").strip().lower()
+            if not name:
+                continue
+            if not re.search(_literal_pattern(name), text):
+                continue  # the posting does not say it: the model made it up or reworded it
+            for skill in canonical_skill_hits(name) or [name]:
+                if skill not in found and not (skill == "sql" and has_sql_engine):
+                    target.add(skill)
+                    found.add(skill)
+
+
+def read_with_brain(jobs: Sequence[Dict[str, Any]], candidate_yoe: float) -> None:
+    """Have the AI model read the postings still in the running, before they are judged and scored.
+
+    Only postings that already pass the title and place rules, and whose stated years do not already
+    leave the candidate out, are sent: the free allowance is small. Does nothing when no key is set.
+    """
+    if not brain.available():
+        return
+    wanted = []
+    for job in jobs:
+        if job.get("brain") is not None or not str(job.get("description") or "").strip():
+            continue
+        if not title_is_eligible(job) or not location_is_eligible(job):
+            continue
+        if experience_is_stated(job) and not experience_is_eligible(job, candidate_yoe):
+            continue
+        wanted.append(job)
+    if wanted:
+        brain.read_postings(wanted)
+        for job in wanted:  # years the model supplied are picked up when the range is next worked out
+            if job.get("brain") and job.get("min_experience_years") is None and job.get("max_experience_years") is None:
+                _extract_experience_range(job)
+
+
 # A posting that names only a few skills gives little to go on: "Azure, Git, SQL" is not a 100% match.
 MIN_SKILLS_FOR_FULL_SCORE = 5
 
@@ -918,6 +973,7 @@ def score_job(job: Dict[str, Any]) -> Dict[str, Any]:
         alternative_skills = {skill for name in fit["alternative_only"] for skill in OTHER_LANGUAGES[name][1]}
     required_skills -= alternative_skills
     optional_skills -= alternative_skills
+    _add_brain_skills(job, required_skills, optional_skills, alternative_skills)
 
     weight = {skill: 1.0 for skill in required_skills}
     weight.update({skill: 0.5 for skill in optional_skills})
@@ -1547,7 +1603,33 @@ def parse_experience_requirement(job: Dict[str, Any]) -> Tuple[float | None, flo
         lo, hi = _resolve_experience(_experience_mentions(str(job.get(key) or ""), is_title=is_title))
         if lo is not None or hi is not None:
             return lo, hi
-    return None, None
+    return _brain_years(job)
+
+
+_YEARS_OUTRIGHT_RE = re.compile(rf"\d\s*\+?\s*(?:{_YR}|{_MO})\b")
+
+
+def _brain_years(job: Dict[str, Any]) -> Tuple[float | None, float | None]:
+    """The years the AI model read (job["brain"]), kept only when the posting's text really holds that figure."""
+    answer = job.get("brain") if isinstance(job.get("brain"), dict) else {}
+    if answer.get("min_years") is None and answer.get("max_years") is None:
+        return None, None
+    text = _normalise_experience_text(f"{job.get('title') or ''}\n{job.get('description') or ''}")
+    # A posting that says "<number> years" outright and still gave the rules nothing had that figure set
+    # aside on purpose (a preferred extra, the employer's own history). That stands; the model fills in
+    # only where the posting words its years some way the rules do not read at all.
+    if _YEARS_OUTRIGHT_RE.search(text):
+        return None, None
+
+    def kept(value: Any) -> float | None:
+        if not isinstance(value, (int, float)) or isinstance(value, bool):
+            return None
+        if value == 0:
+            return 0.0 if re.search(r"\bfreshers?\b|\bfresh\s+graduates?\b|\bno\s+(?:prior\s+)?experience\b", text) else None
+        # The figure itself, not part of a longer number ("3" is not in "13" or "3.5"; "3." ending a sentence is fine).
+        return float(value) if re.search(rf"(?<!\d)(?<!\d\.){re.escape(f'{value:g}')}(?!\d)(?!\.\d)", text) else None
+
+    return kept(answer.get("min_years")), kept(answer.get("max_years"))
 
 
 def _extract_experience_range(job: Dict[str, Any], overwrite: bool = False) -> None:
@@ -2980,6 +3062,8 @@ FAST_STATE_FILE = DATA_DIR / "hyderabad_alert_state.json"
 FAST_HELD_HOURS = 24.0
 # Longest one pass may spend searching. A rate-limited runner then gives up and the next runner takes over.
 FAST_SEARCH_BUDGET_SECONDS = 150.0
+# Longest one pass may wait for the AI reader; the pass repeats every few minutes, so it must stay quick.
+FAST_BRAIN_SECONDS = 40.0
 WORK_MODE_UNKNOWN = "work mode not stated"
 
 # LinkedIn's public job page has no work-mode field and its public search ignores the work-mode
@@ -3262,6 +3346,8 @@ def fast_alert_pass(state: Dict[str, Any], args: argparse.Namespace) -> Dict[str
         # One empty page ends a search: this scan repeats every few minutes, so it keeps its request count low.
         search_options={"empty_pages_to_stop": 1, "budget_seconds": FAST_SEARCH_BUDGET_SECONDS},
     )
+    brain.start_run(FAST_BRAIN_SECONDS)
+    read_with_brain([job for job in jobs if is_hyderabad_job(job)], args.candidate_yoe)
     candidates = []
     waiting = 0
     for job in jobs:
@@ -3442,9 +3528,10 @@ EXTRA_SKILL_PATTERNS: Dict[str, Tuple[str, ...]] = {
     "angular": (r"\bangular(?:\.?js)?\d*\b",),
     "mlops": (r"\bml\s?ops\b", r"\bmachine\s+learning\s+operations\b"),
     "llmops": (r"\bllm\s?ops\b", r"\bagent\s?ops\b"),
-    "data science": (r"\bdata\s+scien(?:ce|tist)\b",),
-    "data engineering": (r"\bdata\s+engineer(?:ing)?\b",),
-    "data analytics": (r"\bdata\s+analy(?:tics|sis|st)\b",),
+    # The field, not the job title: "Data Analyst" in a title is a role, and would count against everyone.
+    "data science": (r"\bdata\s+science\b",),
+    "data engineering": (r"\bdata\s+engineering\b",),
+    "data analytics": (r"\bdata\s+analytics\b",),
     "data governance": (r"\bdata\s+governance\b",),
     "data quality": (r"\bdata\s+quality\b",),
     "data warehousing": (r"\bdata\s+warehous(?:e|ing)\b", r"\bdwh\b"),
@@ -3836,8 +3923,8 @@ def apply_profile(raw: Dict[str, Any]) -> Dict[str, Any]:
     else:
         os.environ.pop("NTFY_TOPIC", None)
     PROFILE = profile
-    LOG.info("Running for candidate %s: %g year(s), %d role(s), %d skill(s), %s.", profile["id"], years, len(profile["roles"]),
-             len(profile["skills"]), PLACES_NOTE)
+    # The log is public: the id and two counts, nothing that describes the person.
+    LOG.info("Running for candidate %s: %d role(s), %d skill(s).", profile["id"], len(profile["roles"]), len(profile["skills"]))
     return profile
 
 
@@ -3920,6 +4007,8 @@ def main() -> int:
     else:
         collected = collect_jobs(source=args.source, **collect_args)
 
+    brain.start_run()
+    read_with_brain(collected, args.candidate_yoe)
     reasons = {id(job): rejection_reason(job, candidate_yoe=args.candidate_yoe) for job in collected}
     eligible = [job for job in collected if not reasons[id(job)]]
     removed = [

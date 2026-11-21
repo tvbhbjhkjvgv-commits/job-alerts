@@ -157,10 +157,10 @@
    "\\bcypress\\b"
   ],
   "data analytics": [
-   "\\bdata\\s+analy(?:tics|sis|st)\\b"
+   "\\bdata\\s+analytics\\b"
   ],
   "data engineering": [
-   "\\bdata\\s+engineer(?:ing)?\\b"
+   "\\bdata\\s+engineering\\b"
   ],
   "data governance": [
    "\\bdata\\s+governance\\b"
@@ -172,7 +172,7 @@
    "\\bdata\\s+quality\\b"
   ],
   "data science": [
-   "\\bdata\\s+scien(?:ce|tist)\\b"
+   "\\bdata\\s+science\\b"
   ],
   "data structures": [
    "\\bdata\\s+structures\\b",
