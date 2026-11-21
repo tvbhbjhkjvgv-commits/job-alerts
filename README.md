@@ -90,14 +90,14 @@ To switch it on, create a free key and save it as a secret here (Settings -> Sec
 
 | Secret | Where the free key comes from | What is known about the free allowance |
 |---|---|---|
-| `GEMINI_API_KEY` | Google AI Studio (aistudio.google.com -> Get API key) | Google does not publish it; it shows the live limits inside AI Studio. Tried first, strongest model first. |
+| `GEMINI_API_KEY` | Google AI Studio (aistudio.google.com -> Get API key) | Google does not publish it; it shows the live limits inside AI Studio. Tried first: `gemini-3.5-flash-lite` (answers in under a second), then `gemini-3.6-flash`. |
 | `GROQ_API_KEY` | Groq (console.groq.com -> API Keys) | Published: 1,000 requests and 200,000 tokens a day per model, 8,000 tokens a minute. Roughly 130 postings a day per model, three models. |
 
 Then run the **AI Reader Check** workflow: it asks every configured model to read one sample posting and lists which of them answer.
 
 How it behaves:
 
-- **Best model first, then the next.** When a model has used up its free allowance the next one is used; when all are used up the postings left are read by the built-in list alone. A scan never fails or waits long for it (at most two minutes an hour, 40 seconds in a fast-alert pass, 40 postings a run).
+- **Fastest model that reads correctly first, then the next.** (Measured on 2026-11-21: the two newest free Gemini models did not answer within 40 seconds, so they are left out; the lists can be changed, see below.) When a model has used up its free allowance the next one is used; when all are used up the postings left are read by the built-in list alone. A scan never fails or waits long for it (at most two minutes an hour, 40 seconds in a fast-alert pass, 40 postings a run).
 - **Only postings still in the running are sent**: right title, right place, and years that do not already rule the candidate out.
 - **Only the posting's title and text are sent.** Nothing about any candidate is. On Google's free plan, what is sent may be used to improve Google's products; a job posting is public text.
 - **The model is not trusted blindly.** A skill counts only when the posting's own text contains it. The years are still read by the rules; the model's figure is used only where the rules found no figure at all.

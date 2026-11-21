@@ -36,13 +36,18 @@ except ImportError:  # the scans still run, with the rules alone
 
 LOG = logging.getLogger("brain")
 
-# Free plans, best model first. Both speak the same chat-completions format. The model lists can be
-# replaced without a code change (repository variables BRAIN_GEMINI_MODELS / BRAIN_GROQ_MODELS,
-# comma-separated), because providers retire models often.
+# Free plans, best model for this job first. Both speak the same chat-completions format. The model
+# lists can be replaced without a code change (repository variables BRAIN_GEMINI_MODELS /
+# BRAIN_GROQ_MODELS, comma-separated), because providers retire models often.
+#
+# "Best" here is measured, not assumed: on 2026-11-21 gemini-3.5-flash-lite read the sample posting
+# correctly in under a second and gemini-3.6-flash gave the same answer in 21 seconds, while the two
+# newest free models (gemini-4-hydrogen, gemini-3.8-flash) did not answer within 40 seconds. A scan
+# has two minutes for all its postings, so the fast model leads and the slow ones are left out.
 PROVIDERS: Tuple[Dict[str, Any], ...] = (
     {"name": "Gemini", "key": "GEMINI_API_KEY", "models_env": "BRAIN_GEMINI_MODELS",
      "url": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-     "models": ("gemini-4-hydrogen", "gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite")},
+     "models": ("gemini-3.5-flash-lite", "gemini-3.6-flash")},
     {"name": "Groq", "key": "GROQ_API_KEY", "models_env": "BRAIN_GROQ_MODELS",
      "url": "https://api.groq.com/openai/v1/chat/completions",
      "models": ("openai/gpt-oss-120b", "qwen/qwen3.8-27b", "openai/gpt-oss-20b")},
@@ -53,7 +58,7 @@ DEFAULT_BUDGET_SECONDS = 120.0
 MAX_POSTINGS_PER_RUN = 40
 MAX_POSTING_CHARS = 12000
 MAX_OUTPUT_TOKENS = 1500
-REQUEST_TIMEOUT = 40
+REQUEST_TIMEOUT = 30
 # A per-minute limit that clears within this many seconds is waited out; a longer one means "use the next model".
 SHORT_WAIT_SECONDS = 20.0
 MAX_SKILLS = 30

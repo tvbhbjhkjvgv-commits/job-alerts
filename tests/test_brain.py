@@ -70,29 +70,27 @@ check("no key: the brain is off, nothing is sent, the posting is untouched",
 
 # --- 2. the best model first; the answer tidied -------------------------------------------------------
 reset(GEMINI_API_KEY="g-key", GROQ_API_KEY="q-key")
-script["gemini-4-hydrogen"] = [Reply(200, GOOD)]
+script["gemini-3.5-flash-lite"] = [Reply(200, GOOD)]
 answer = brain.read_one("Data Analyst", POSTING)
 check("the first model of the first provider is asked, with that provider's key",
-      len(calls) == 1 and calls[0]["model"] == "gemini-4-hydrogen" and calls[0]["key"] == "Bearer g-key"
+      len(calls) == 1 and calls[0]["model"] == "gemini-3.5-flash-lite" and calls[0]["key"] == "Bearer g-key"
       and "generativelanguage.googleapis.com" in calls[0]["url"] and calls[0]["json_mode"], str(calls))
 check("only the posting is sent", calls[0]["user"] == f"Job title: Data Analyst\n\nPosting:\n{POSTING}")
 check("the answer is tidied: no soft skill, no repeat, optional never repeats required",
       answer == {"required": ["SQL", "Power BI", "Alteryx"], "optional": ["Python"], "min_years": 2.0, "max_years": 4.0,
-                 "model": "Gemini gemini-4-hydrogen"}, str(answer))
+                 "model": "Gemini gemini-3.5-flash-lite"}, str(answer))
 
 # --- 3. when a model has used up its free allowance ---------------------------------------------------
 reset(GEMINI_API_KEY="g-key", GROQ_API_KEY="q-key")
-for model in ("gemini-4-hydrogen", "gemini-3.8-flash", "gemini-3.6-flash"):
-    script[model] = [Reply(429)]
-script["gemini-3.5-flash-lite"] = [Reply(200, GOOD)]
+script["gemini-3.5-flash-lite"] = [Reply(429)]
+script["gemini-3.6-flash"] = [Reply(200, GOOD)]
 first = brain.read_one("Data Analyst", POSTING)
 asked_first = [c["model"] for c in calls]
 calls.clear()
 second = brain.read_one("Data Analyst", POSTING)
 check("a used-up model is skipped and the next one answers",
-      asked_first == ["gemini-4-hydrogen", "gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite"]
-      and first["model"] == "Gemini gemini-3.5-flash-lite", str(asked_first))
-check("...and is not asked again for a while", [c["model"] for c in calls] == ["gemini-3.5-flash-lite"] and second is not None, str(calls))
+      asked_first == ["gemini-3.5-flash-lite", "gemini-3.6-flash"] and first["model"] == "Gemini gemini-3.6-flash", str(asked_first))
+check("...and is not asked again for a while", [c["model"] for c in calls] == ["gemini-3.6-flash"] and second is not None, str(calls))
 
 reset(GROQ_API_KEY="q-key")
 script["openai/gpt-oss-120b"] = [Reply(429, headers={"retry-after": "3"}), Reply(200, GOOD)]
@@ -108,11 +106,11 @@ check("every model used up: no answer, and the scan carries on", brain.read_one(
 
 # --- 4. keys, retired models, odd replies -------------------------------------------------------------
 reset(GEMINI_API_KEY="bad", GROQ_API_KEY="q-key")
-script["gemini-4-hydrogen"] = [Reply(401)]
+script["gemini-3.5-flash-lite"] = [Reply(401)]
 script["openai/gpt-oss-120b"] = [Reply(200, GOOD)]
 answer = brain.read_one("Data Analyst", POSTING)
 check("a refused key switches that provider off, and the other one answers",
-      [c["model"] for c in calls] == ["gemini-4-hydrogen", "openai/gpt-oss-120b"] and answer["model"].startswith("Groq")
+      [c["model"] for c in calls] == ["gemini-3.5-flash-lite", "openai/gpt-oss-120b"] and answer["model"].startswith("Groq")
       and all(provider["name"] == "Groq" for provider, _ in brain.brains()), str(calls))
 
 reset(GROQ_API_KEY="q-key")
