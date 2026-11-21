@@ -779,6 +779,7 @@
  "defaults": {
   "linkedin": 60,
   "fast_alert": 70,
-  "career_sites": 60
+  "career_sites": 60,
+  "trial_days": 7
  }
 });

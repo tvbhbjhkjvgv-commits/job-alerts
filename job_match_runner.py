@@ -2469,7 +2469,66 @@ def filter_job_preferences(
     return [job for job in jobs if not rejection_reason(job, enforce_title=enforce_title, candidate_yoe=candidate_yoe)]
 
 
+def _short_list(items: Sequence[str], limit: int) -> str:
+    items = list(items)
+    more = f" +{len(items) - limit}" if len(items) > limit else ""
+    return ", ".join(items[:limit]) + more
+
+
+def compact_table(jobs: Sequence[Dict[str, Any]]) -> str:
+    """The job table of a candidate's mail: six narrow columns that fit a mail window, so nothing scrolls sideways."""
+    cell = 'style="padding:5px 6px;border-bottom:1px solid #e0e0e0;vertical-align:top;word-wrap:break-word;overflow-wrap:anywhere"'
+    head = 'style="padding:5px 6px;text-align:left;font-weight:bold"'
+    rows = []
+    for j in jobs:
+        title = html.escape(str(j.get("title") or "Untitled role"))
+        url = html.escape(clean_job_url(j), quote=True)
+        linked = f'<a href="{url}" style="color:#1a55c4;font-weight:bold">{title}</a>' if url.startswith("https://") else f"<b>{title}</b>"
+        easy = ' <span style="color:#1a73e8;white-space:nowrap">&#9889; Easy Apply</span>' if j.get("is_easy_apply") else ""
+        mode = str(j.get("workplace_type") or "")
+        where = html.escape(location_label(j)) + (f"<br>{html.escape(mode)}" if mode and mode != "Not specified" else "")
+        have = _short_list(j.get("matched_skills", []), 8) or "none found"
+        lacks = _short_list(j.get("missing_skills", []), 5)
+        skills = f"<b>Have:</b> {html.escape(have)}" + (f'<br><span style="color:#666"><b>Missing:</b> {html.escape(lacks)}</span>' if lacks else "")
+        vals = [
+            f"<b>{int(j.get('skill_match_pct', 0))}%</b>",
+            f"{linked}{easy}<br>{html.escape(str(j.get('company') or 'Unknown'))}",
+            where,
+            html.escape(experience_label(j)),
+            html.escape(str(j.get("freshness_badge") or j.get("posted_time") or "")),
+            skills,
+        ]
+        rows.append("<tr>" + "".join(f"<td {cell}>{v}</td>" for v in vals) + "</tr>")
+    columns = (("Match", 8), ("Job", 30), ("Where", 17), ("Experience", 10), ("Posted", 11), ("Your skills", 24))
+    return (
+        '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;table-layout:fixed;width:100%;max-width:820px;'
+        'font-size:11px;line-height:1.35">'
+        + "".join(f'<col style="width:{width}%">' for _, width in columns)
+        + f'<thead><tr style="background:#17365d;color:#fff">{"".join(f"<th {head}>{name}</th>" for name, _ in columns)}</tr></thead>'
+        + f'<tbody>{"".join(rows)}</tbody></table>'
+    )
+
+
+def candidate_mail(title: str, tables: Sequence[Tuple[str, Sequence[Dict[str, Any]]]], empty: str = "") -> str:
+    """A candidate's mail: a title and the job tables, nothing else.
+
+    No run time, scan notes, counts of what was filtered out or anything about how the scan is run.
+    """
+    parts = "".join(
+        f'<h3 style="font-size:13px;margin:16px 0 6px">{html.escape(heading)} ({len(jobs)})</h3>{compact_table(jobs)}'
+        for heading, jobs in tables if jobs
+    )
+    if not parts:
+        parts = f'<p style="margin:8px 0">{html.escape(empty or "No new jobs this time.")}</p>'
+    return (
+        '<!doctype html><html><body style="font-family:Arial,sans-serif;color:#202124;font-size:12px;margin:0;padding:8px">'
+        f'<h2 style="font-size:16px;margin:0 0 4px">{html.escape(title)}</h2>{parts}</body></html>'
+    )
+
+
 def html_table(jobs: Sequence[Dict[str, Any]], include_match: bool = True) -> str:
+    if PROFILE:
+        return compact_table(jobs)
     headers = ["Match %", "Apply Type", "Job title", "Company", "Location", "Work mode", "Posted", "Experience", "Matched skills", "Missing skills", "Direct job link"]
     rows = []
     if not jobs:
@@ -2715,6 +2774,10 @@ def build_email_html(
     scan_summary: str = "",
     min_match: int = 60,
 ) -> str:
+    if PROFILE:
+        below = [job for job in all_scraped if int(job.get("skill_match_pct", 0)) < min_match]
+        return candidate_mail("New LinkedIn jobs for you", [
+            (f"Matching your skills by {min_match}% or more", matched), (f"Other new jobs, below {min_match}%", below)])
     run_time = datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%d %b %Y, %I:%M %p IST")
     return f"""<!doctype html><html><body style="font-family:Arial,sans-serif;color:#202124">
     <h2>LinkedIn Job Match Monitor Report</h2>
@@ -2737,6 +2800,8 @@ def build_email_html(
 
 def build_status_email_html(collected: Sequence[Dict[str, Any]], hours: float, candidate_yoe: float) -> str:
     """Body of the mail sent when a run finds no eligible job: what was scanned and why each job was filtered out."""
+    if PROFILE:
+        return candidate_mail("LinkedIn jobs: nothing new for you", [], empty=f"No new matching jobs in the last {hours:g} hour(s).")
     run_time = datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%d %b %Y, %I:%M %p IST")
     reasons = [(job, rejection_reason(job, candidate_yoe=candidate_yoe)) for job in collected]
     counts: Dict[str, int] = {}
@@ -3096,6 +3161,8 @@ def build_fast_alert_email_html(
     candidate_yoe: float,
     min_match: int,
 ) -> str:
+    if PROFILE:
+        return candidate_mail(name, [("Apply now", alerts), ("Also a match, but the posting states no years of experience", held)])
     run_time = datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%d %b %Y, %I:%M %p IST")
     held_table = html_table(held) if held else '<p style="color:#666;margin:8px 0 18px">None found since the last alert.</p>'
     return f"""<!doctype html><html><body style="font-family:Arial,sans-serif;color:#202124">
@@ -3378,6 +3445,10 @@ _ROLE_PHRASES: List[Tuple["re.Pattern[str]", str]] = [
     (re.compile(r"\bdeveloper\b|\bengineer\b|\bprogrammer\b"), _ROLE_NOUN),
 ]
 _ROLE_FILLER = {"and", "of", "the", "for", "in", "a", "an", "jr", "junior", "senior", "sr", "lead", "associate", "i", "ii"}
+# A candidate added on a free trial is scanned for this many days (their file can say otherwise),
+# and is sent the welcome mail once, within this many hours of being added.
+TRIAL_DAYS = 7
+WELCOME_WINDOW_HOURS = 24.0
 _PROFILE_ID_RE = re.compile(r"^[a-z0-9]{3,24}$")
 _EMAIL_RE = re.compile(r"^[^@\s,;<>]+@[^@\s,;<>]+\.[^@\s,;<>]+$")
 
@@ -3464,6 +3535,16 @@ def normalise_profile(raw: Any) -> Dict[str, Any]:
     except (TypeError, ValueError):
         years = 0.0
         problems.append("experience_years must be a number from 0 to 50")
+    plan = str(raw.get("plan") or "full").strip().lower()
+    if plan not in ("trial", "full"):
+        problems.append('plan must be "trial" or "full"')
+    started = _parse_time(raw.get("trial_started"))
+    if plan == "trial" and started is None:
+        problems.append("a trial needs the time it started (trial_started)")
+    try:
+        trial_days = min(365, max(1, int(raw.get("trial_days", TRIAL_DAYS))))
+    except (TypeError, ValueError):
+        trial_days = TRIAL_DAYS
     if problems:
         raise ValueError("; ".join(problems))
 
@@ -3498,7 +3579,97 @@ def normalise_profile(raw: Any) -> Dict[str, Any]:
         "linkedin": linkedin,
         "fast_alert": fast,
         "career_sites": sites,
+        "plan": plan,
+        "trial_started": started.isoformat() if started else "",
+        "trial_days": trial_days,
     }
+
+
+def _parse_time(value: Any) -> datetime | None:
+    """A time written by the settings page ("2026-11-21T12:30:00.000Z"); None when it is missing or unreadable."""
+    try:
+        moment = datetime.fromisoformat(str(value or "").strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)
+
+
+def trial_end(profile: Dict[str, Any]) -> datetime | None:
+    """When a candidate's free trial ends; None for a candidate with full access."""
+    started = _parse_time(profile.get("trial_started"))
+    if profile.get("plan") != "trial" or started is None:
+        return None
+    return started + timedelta(days=int(profile.get("trial_days") or TRIAL_DAYS))
+
+
+def trial_is_over(profile: Dict[str, Any], now: datetime | None = None) -> bool:
+    """The candidate is on a trial and its last day has passed: no scan runs for them any more."""
+    end = trial_end(profile)
+    return end is not None and (now or datetime.now(timezone.utc)) >= end
+
+
+def welcome_is_due(profile: Dict[str, Any], now: datetime | None = None) -> bool:
+    """The candidate's trial started within the last WELCOME_WINDOW_HOURS, so the welcome mail belongs to now.
+
+    The workflow remembers who has been welcomed; the window keeps a welcome from ever going out late,
+    for example to someone whose record was lost long after they were added.
+    """
+    started = _parse_time(profile.get("trial_started"))
+    now = now or datetime.now(timezone.utc)
+    if profile.get("plan") != "trial" or started is None or not profile.get("enabled", True) or trial_is_over(profile, now):
+        return False
+    return timedelta(0) <= now - started <= timedelta(hours=WELCOME_WINDOW_HOURS)
+
+
+def build_welcome_email_html(profile: Dict[str, Any]) -> str:
+    """The mail a candidate gets once, when they are added on a free trial."""
+    end = trial_end(profile)
+    ends_on = end.astimezone(ZoneInfo("Asia/Kolkata")).strftime("%d %b %Y") if end else ""
+    name = html.escape(profile["name"].split(" ")[0]) if profile.get("name") else "there"
+    places = _or_list(profile["cities"]) if profile["cities"] else ""
+    if profile["remote_india"]:
+        places = f"{places}, or remote in India" if places else "remote jobs in India"
+    alerts = []
+    if profile["linkedin"]["enabled"]:
+        alerts.append(f"<b>LinkedIn, every hour</b>: new postings that match your skills by {profile['linkedin']['min_match']}% or more.")
+    if profile["fast_alert"]["enabled"]:
+        alerts.append(f"<b>Fast alert for {html.escape(profile['fast_alert']['city'])}</b>: checked every few minutes, "
+                      "so you can apply while a posting is new.")
+    if profile["career_sites"]["enabled"]:
+        alerts.append("<b>Company career pages, every hour</b>: new openings on companies' own sites that ask for your years of experience.")
+    alert_items = "".join(f"<li>{item}</li>" for item in alerts) or "<li>No alert is switched on for you yet.</li>"
+    return f"""<!doctype html><html><body style="font-family:Arial,sans-serif;color:#202124">
+    <h2>Your job alerts are active</h2>
+    <p>Hi {name},</p>
+    <p>You are now activated on a <b>free trial</b>. It runs for {int(profile['trial_days'])} days and ends on <b>{ends_on}</b>.</p>
+    <p>During the trial you will get:</p>
+    <ul>{alert_items}</ul>
+    <p>The alerts look for these roles: <b>{html.escape(', '.join(profile['roles']))}</b><br>
+    Where: <b>{html.escape(places)}</b><br>
+    Experience: <b>{profile['experience_years']:g} year(s)</b></p>
+    <p>A mail is sent only when there is something new for you, so a quiet hour means nothing matched.</p>
+    <p>If any of this is wrong, or you want the alerts stopped, reply to this mail.</p>
+    <p style="font-size:11px;color:#666;margin-top:22px">Automated message. After {ends_on} the alerts stop unless your access is extended.</p>
+    </body></html>"""
+
+
+def send_welcome(profile: Dict[str, Any], dry_run: bool = False) -> int:
+    """Send the welcome mail when it is due. Exit code 0 when it went out or was not due, 1 when it could not be sent."""
+    if not welcome_is_due(profile):
+        LOG.info("No welcome mail is due for candidate %s.", profile["id"])
+        return 0
+    end = trial_end(profile)
+    subject = f"Your job alerts are active: free trial until {end.astimezone(ZoneInfo('Asia/Kolkata')).strftime('%d %b %Y')}"
+    body = build_welcome_email_html(profile)
+    if dry_run:
+        REPORT_DIR.mkdir(parents=True, exist_ok=True)
+        (REPORT_DIR / "welcome_preview.html").write_text(body, encoding="utf-8")
+        LOG.info("Dry run: welcome mail %r not sent; preview written to %s", subject, REPORT_DIR)
+        return 0
+    mailed = send_gmail(subject, body)
+    if mailed:
+        LOG.info("Welcome mail sent to candidate %s.", profile["id"])
+    return _exit_code(mailed)
 
 
 def load_profile(path: Any) -> Dict[str, Any]:
@@ -3621,10 +3792,20 @@ def main() -> int:
                         help="With --fast-alert: send nothing and keep no state; write the alert to reports/ instead")
     parser.add_argument("--profile", type=str, default=os.environ.get("CANDIDATE_PROFILE", ""),
                         help="One candidate's settings file (JSON). Its skills, roles, cities, years and addresses replace the built-in ones")
+    parser.add_argument("--welcome", action="store_true",
+                        help="With --profile: send the candidate's welcome mail if their free trial has just started, and stop")
     args = parser.parse_args()
+
+    if args.welcome:
+        if not args.profile:
+            parser.error("--welcome needs --profile")
+        return send_welcome(apply_profile(load_profile(args.profile)), dry_run=args.dry_run)
 
     if args.profile:
         profile = apply_profile(load_profile(args.profile))
+        if trial_is_over(profile):
+            LOG.info("The free trial of candidate %s has ended. Nothing to do.", profile["id"])
+            return 0
         args.candidate_yoe = profile["experience_years"]
         args.min_match = profile["linkedin"]["min_match"]
         args.fast_min_match = profile["fast_alert"]["min_match"]
@@ -3784,8 +3965,8 @@ def run() -> int:
     except Exception as exc:
         # A crashed run still sends a mail, so a missing hourly mail always means the run never started.
         LOG.exception("Job scan failed.")
-        if not MAIL_EVERY_RUN:
-            raise  # the failed run shows on the Actions tab; the candidate is not mailed about it
+        if PROFILE or not MAIL_EVERY_RUN:
+            raise  # the failed run shows on the Actions tab; a candidate is never mailed about it
         failed_at = datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%d %b %I:%M %p IST")
         send_gmail(
             f"LinkedIn job scan FAILED | {failed_at}",

@@ -169,13 +169,17 @@
     var isNew = !profile;
     profile = profile || {};
     var linkedin = profile.linkedin || {}, fast = profile.fast_alert || {}, sites = profile.career_sites || {};
-    state.current = { id: profile.id || newId(), sha: sha || null, isNew: isNew };
+    state.current = { id: profile.id || newId(), sha: sha || null, isNew: isNew, trialStarted: profile.trial_started || "" };
     $("editor-title").textContent = isNew ? "New candidate" : (profile.name || "Candidate " + profile.id);
     $("candidate-id").textContent = "id: " + state.current.id;
     $("name").value = profile.name || "";
     $("years").value = profile.experience_years === undefined ? "" : profile.experience_years;
     $("years-hint").textContent = "";
     $("enabled").checked = profile.enabled !== false;
+    // A new candidate starts on a free trial; a file from before trials existed has full access.
+    $("plan").value = isNew ? "trial" : (profile.plan === "trial" ? "trial" : "full");
+    $("trial_days").value = profile.trial_days || DATA.defaults.trial_days;
+    syncTrial();
     chips.emails.set(profile.emails || []);
     chips.roles.set(profile.roles || []);
     chips.skills.set(profile.skills || []);
@@ -226,7 +230,62 @@
       linkedin: { enabled: $("linkedin_enabled").checked, min_match: number("linkedin_min", DATA.defaults.linkedin), mail_every_run: $("linkedin_every").checked },
       fast_alert: { enabled: $("fast_enabled").checked, city: $("fast_city").value || "", min_match: number("fast_min", DATA.defaults.fast_alert) },
       career_sites: { enabled: $("sites_enabled").checked, min_match: number("sites_min", DATA.defaults.career_sites), companies: ticked($("companies")) },
+      plan: $("plan").value,
+      trial_started: state.current.trialStarted,
+      trial_days: trialDays(),
     };
+  }
+
+  // ---- free trial -------------------------------------------------------------------------------
+  function trialDays() {
+    var days = Math.round(Number($("trial_days").value));
+    return days >= 1 && days <= 365 ? days : DATA.defaults.trial_days;
+  }
+
+  function trialEnd(started, days) {
+    var from = new Date(started);
+    return isNaN(from.getTime()) ? null : new Date(from.getTime() + days * 86400000);
+  }
+
+  function day(date) {
+    return date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  }
+
+  function trialNote(profile) {
+    if (profile.plan !== "trial") return "";
+    var end = trialEnd(profile.trial_started, profile.trial_days || DATA.defaults.trial_days);
+    if (!end) return "";
+    return end.getTime() <= Date.now() ? "trial ended" : "trial to " + day(end);
+  }
+
+  function syncTrial() {
+    var onTrial = $("plan").value === "trial";
+    var started = state.current ? state.current.trialStarted : "";
+    var end = started ? trialEnd(started, trialDays()) : null;
+    $("trial-box").hidden = !onTrial;
+    $("trial-restart").hidden = !(onTrial && end);
+    if (!onTrial) {
+      $("trial-hint").textContent = "No end date: the alerts run until this person is paused or deleted.";
+    } else if (!end) {
+      $("trial-hint").textContent = "The trial starts when you save. A welcome mail tells the person their alerts are active and when the trial ends.";
+    } else if (end.getTime() <= Date.now()) {
+      $("trial-hint").textContent = "The trial started on " + day(new Date(started)) + " and ended on " + day(end)
+        + ". No alerts are sent now. Add days, start a new trial, or switch to full access.";
+    } else {
+      $("trial-hint").textContent = "The trial started on " + day(new Date(started)) + " and ends on " + day(end) + ". After that the alerts stop by themselves.";
+    }
+  }
+
+  // Start the welcome mail right away. This needs a token that may start workflows in the code
+  // repository; without that the hourly run sends the welcome instead.
+  function startWelcome(id) {
+    var owner = state.repo.split("/")[0];
+    var code = /\.github\.io$/.test(location.hostname) ? (location.pathname.split("/")[1] || "job-alerts") : "job-alerts";
+    return fetch(API + owner + "/" + code + "/actions/workflows/welcome.yml/dispatches", {
+      method: "POST",
+      headers: { "Accept": "application/vnd.github+json", "Authorization": "Bearer " + state.token, "X-GitHub-Api-Version": "2022-11-28" },
+      body: JSON.stringify({ ref: "main", inputs: { only: id } }),
+    }).then(function (response) { return response.status === 204; }, function () { return false; });
   }
 
   // The same checks the scans make when they read the file (normalise_profile in job_match_runner.py).
@@ -338,7 +397,7 @@
       var name = document.createElement("span");
       name.textContent = person.profile.name || person.profile.id;
       var note = document.createElement("small");
-      note.textContent = person.profile.enabled === false ? "paused" : "";
+      note.textContent = person.profile.enabled === false ? "paused" : trialNote(person.profile);
       button.appendChild(name);
       button.appendChild(note);
       button.addEventListener("click", function () { showCandidate(person.profile, person.sha); });
@@ -361,6 +420,9 @@
       $("connection").open = true;
       return;
     }
+    // A trial with no start yet begins now, and its welcome mail is due.
+    var welcome = profile.plan === "trial" && !profile.trial_started && profile.enabled;
+    if (profile.plan === "trial" && !profile.trial_started) profile.trial_started = new Date().toISOString();
     $("save").disabled = true;
     setStatus("save-status", "Saving...");
     var path = "/contents/candidates/" + profile.id + ".json";
@@ -369,11 +431,17 @@
     github(path, "PUT", body).then(function (answer) {
       state.current.sha = answer.content.sha;
       state.current.isNew = false;
+      state.current.trialStarted = profile.trial_started;
+      syncTrial();
       return loadPeople();
     }).then(function () {
+      return welcome ? startWelcome(profile.id) : null;
+    }).then(function (started) {
       $("delete").hidden = false;
       $("editor-title").textContent = profile.name || "Candidate " + profile.id;
-      setStatus("save-status", "Saved. The next scans use these settings.", "ok");
+      var note = started === null ? "" : (started ? " The welcome mail is being sent now."
+        : " The welcome mail goes out with the next hourly run (this token may not start it right away).");
+      setStatus("save-status", "Saved. The next scans use these settings." + note, "ok");
     }).catch(function (error) {
       setStatus("save-status", error.message, "bad");
     }).then(function () { $("save").disabled = false; });
@@ -488,6 +556,13 @@
     checkGrid($("companies"), Object.keys(DATA.companies).map(function (key) { return { value: key, label: DATA.companies[key] }; }), "company");
     chips.cities.onChange(function (cities) { syncFastCity(cities.map(canonicalCity)); });
     $("python_rules").addEventListener("change", syncStacks);
+    $("plan").addEventListener("change", syncTrial);
+    $("trial_days").addEventListener("input", syncTrial);
+    $("trial-restart").addEventListener("click", function () {
+      state.current.trialStarted = "";
+      syncTrial();
+      setStatus("save-status", "A new trial starts when you save, and a new welcome mail is sent.");
+    });
 
     var owner = /\.github\.io$/.test(location.hostname) ? location.hostname.split(".")[0] : "";
     $("repo").value = recall("job-alerts-repo") || (owner ? owner + "/job-alerts-data" : "");

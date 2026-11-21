@@ -24,6 +24,18 @@ Job names and logs here show only a candidate's id (for example `c8f3k2ab`), nev
 
 The next scans pick the new candidate up by themselves. To pause someone, untick **Active**; to remove them, **Delete this candidate**.
 
+### Free trial and the welcome mail
+
+A new candidate starts on a **free trial** of 7 days (the length can be changed per person).
+
+- **Welcome mail.** When the candidate is saved, they are sent one mail saying their alerts are active, which alerts they get, and the day the trial ends. It goes out at once when the page's token may start workflows (see [The token](#the-token)); otherwise with the next hourly run. It is sent once, and only within a day of the trial starting.
+- **When the trial ends** the scans skip the person by themselves; nothing more is sent. Their name shows "trial ended" in the list.
+- **To keep someone on:** open them on the page and either raise the trial length, press **Start a new trial from today** (which also sends a new welcome mail), or set Access to **Full access**, which has no end date.
+
+### What the candidate receives
+
+Each alert mail is a title and the job tables, nothing else: match percentage, the job with its link and company, where, the years asked for, when it was posted, and which of the person's skills the posting names. The table is sized to fit a mail window, so it reads without scrolling sideways. Nothing about how or where the scans run is in any mail.
+
 ### What each setting does
 
 | Setting | Effect |
@@ -58,6 +70,8 @@ Already done for this repository unless noted.
 ### The token
 
 The settings page saves each candidate as a file in `job-alerts-data`, so it needs a token that may write there. Create a fine-grained token (GitHub -> Settings -> Developer settings -> Personal access tokens -> Fine-grained tokens) with access to **only** `job-alerts-data` and the permission **Contents: read and write**. The page keeps it in the browser it was typed into; "Forget token" removes it.
+
+For the welcome mail to go out the moment a candidate is saved, also give the token access to `job-alerts` with the permission **Actions: read and write**. Without it everything still works; the welcome mail then goes out with the next hourly run.
 
 ## How it runs
 

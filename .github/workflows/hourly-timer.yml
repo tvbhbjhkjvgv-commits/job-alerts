@@ -28,6 +28,7 @@ env:
   TARGET_MINUTE: '30'
   MONITOR_WORKFLOW: linkedin-hourly.yml
   PORTALS_WORKFLOW: career-sites.yml
+  WELCOME_WORKFLOW: welcome.yml
   TIMER_WORKFLOW: hourly-timer.yml
   WATCHDOG_WORKFLOW: timer-watchdog.yml
 
@@ -84,7 +85,11 @@ jobs:
         if: always() && steps.dedupe.outputs.duplicate != 'true'
         continue-on-error: true
         run: |
-          gh workflow run "$PORTALS_WORKFLOW" --repo "$REPO" --ref "$REF"             || echo "::warning::Could not start the career-site scan this hour."
+          gh workflow run "$PORTALS_WORKFLOW" --repo "$REPO" --ref "$REF" \
+            || echo "::warning::Could not start the career-site scan this hour."
+          # Welcome mails for candidates added in the last hour whose welcome has not gone out yet.
+          gh workflow run "$WELCOME_WORKFLOW" --repo "$REPO" --ref "$REF" \
+            || echo "::warning::Could not start the welcome mails this hour."
 
       - name: Start the next chain link
         # Runs even if starting the monitor failed, so the chain never breaks.

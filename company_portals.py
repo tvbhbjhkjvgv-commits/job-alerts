@@ -813,6 +813,9 @@ def build_mail(
     stated_min_match: int = 0,
 ) -> str:
     report = report or COMPANY_SITES
+    if core.PROFILE:  # a candidate's mail is the tables only
+        return core.candidate_mail("New openings on company career pages", [
+            ("Asking for your years of experience", matches), ("A match, but the posting states no years of experience", held)])
     floor = f", at a skill match of {stated_min_match}% or more" if stated_min_match else ""
     run_time = datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%d %b %Y, %I:%M %p IST")
     none = '<p style="color:#666;margin:8px 0 18px">None new since the last mail.</p>'
@@ -971,6 +974,9 @@ def main() -> int:
     wanted = [c.strip().lower() for c in args.companies.split(",") if c.strip()]
     if args.profile:
         profile = use_profile(args.profile)
+        if core.trial_is_over(profile):
+            LOG.info("The free trial of candidate %s has ended. Nothing to do.", profile["id"])
+            return 0
         if not profile["enabled"] or not profile["career_sites"]["enabled"]:
             LOG.info("The career-site scan is switched off for candidate %s. Nothing to do.", profile["id"])
             return 0

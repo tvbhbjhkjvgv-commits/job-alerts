@@ -60,7 +60,7 @@ def page_data() -> dict:
         "cities": {name.title(): list(names) for name, names in core.CITY_ALIASES.items()},
         "companies": {key: name for key, (name, _reader) in portals.PORTALS.items()},
         "roles": [{"name": name, "title": title, "signals": signals} for name, title, signals in ROLES],
-        "defaults": {"linkedin": 60, "fast_alert": core.FAST_ALERT_MIN_MATCH, "career_sites": 60},
+        "defaults": {"linkedin": 60, "fast_alert": core.FAST_ALERT_MIN_MATCH, "career_sites": 60, "trial_days": core.TRIAL_DAYS},
     }
 
 

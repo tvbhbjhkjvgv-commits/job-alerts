@@ -8,6 +8,9 @@ workflows fan out over, as lines for $GITHUB_OUTPUT:
   linkedin           one entry per candidate with the hourly LinkedIn report switched on
   fast               one entry per candidate with the fast alert switched on
   sites              one entry per candidate with the career-site scan switched on
+  welcome            one entry per candidate whose free trial has just started (the welcome mail)
+
+A candidate whose free trial has ended is left out of every list.
 
 Only candidate ids are printed (the log is public); names and addresses stay in the files.
 A file that cannot be read or fails the checks is skipped with a warning, so one bad file never
@@ -43,13 +46,16 @@ def read_candidates(folder: Path, only: List[str] | None = None) -> List[Dict[st
             continue
         if profile["id"] in seen or not profile["enabled"] or (only and profile["id"] not in only):
             continue
+        if core.trial_is_over(profile):
+            print(f"::notice::The free trial of candidate {profile['id']} has ended; they are not scanned.", file=sys.stderr)
+            continue
         seen.add(profile["id"])
         profiles.append(profile)
     return profiles
 
 
 def matrices(profiles: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, str]]]:
-    out: Dict[str, List[Dict[str, str]]] = {"linkedin_searches": [], "linkedin": [], "fast": [], "sites": []}
+    out: Dict[str, List[Dict[str, str]]] = {"linkedin_searches": [], "linkedin": [], "fast": [], "sites": [], "welcome": []}
     for profile in profiles:
         entry = {"id": profile["id"]}
         if profile["linkedin"]["enabled"]:
@@ -61,6 +67,8 @@ def matrices(profiles: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, str]]]:
             out["fast"].append(entry)
         if profile["career_sites"]["enabled"]:
             out["sites"].append(entry)
+        if core.welcome_is_due(profile):
+            out["welcome"].append(entry)
     return out
 
 

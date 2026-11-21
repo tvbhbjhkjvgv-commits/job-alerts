@@ -1,0 +1,100 @@
+name: Welcome Mail
+
+# Sends the welcome mail to a candidate who has just been added on a free trial: "your alerts are
+# active, the trial ends on <date>". Each candidate gets it once.
+#
+# The settings page starts this right after it saves a new candidate (when its token may start
+# workflows); hourly-timer.yml also starts it every hour, so a welcome is never more than an hour late.
+# A candidate is welcomed only within 24 hours of being added, and never twice: a small marker per
+# candidate is kept in the cache.
+
+on:
+  workflow_dispatch:
+    inputs:
+      only:
+        description: 'Optional candidate ids, comma-separated; empty = everyone who is due a welcome'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+# One at a time, so a candidate added a moment before the hourly run is not welcomed twice.
+concurrency:
+  group: welcome-mail
+  cancel-in-progress: false
+
+env:
+  DATA_REPO: ${{ github.repository_owner }}/${{ vars.DATA_REPO || 'job-alerts-data' }}
+
+jobs:
+  candidates:
+    name: List candidates
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      welcomes: ${{ steps.list.outputs.welcome }}
+      count: ${{ steps.list.outputs.welcome_count }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Check out the candidates' settings
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.DATA_REPO }}
+          ssh-key: ${{ secrets.DATA_REPO_KEY }}
+          path: candidates-data
+
+      - name: List the candidates
+        id: list
+        env:
+          INPUT_ONLY: ${{ inputs.only }}
+        run: python3 tools/matrix.py candidates-data --only "$INPUT_ONLY" >> "$GITHUB_OUTPUT"
+
+  welcome:
+    name: Welcome ${{ matrix.id }}
+    needs: candidates
+    if: ${{ needs.candidates.outputs.count != '0' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.candidates.outputs.welcomes) }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Check out the candidates' settings
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.DATA_REPO }}
+          ssh-key: ${{ secrets.DATA_REPO_KEY }}
+          path: candidates-data
+
+      - name: Has this candidate been welcomed already?
+        id: marker
+        uses: actions/cache/restore@v4
+        with:
+          path: welcomed
+          key: welcome-v1-${{ matrix.id }}
+
+      - name: Send the welcome mail
+        if: steps.marker.outputs.cache-hit != 'true'
+        env:
+          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          CANDIDATE_PROFILE: candidates-data/candidates/${{ matrix.id }}.json
+        run: |
+          python3 job_match_runner.py --welcome
+          mkdir -p welcomed
+          date -u > welcomed/sent
+
+      # Only after the mail went out: a mail that failed is tried again by the next run.
+      - name: Remember the welcome
+        if: steps.marker.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: welcomed
+          key: welcome-v1-${{ matrix.id }}

@@ -115,6 +115,16 @@
     <label>Email addresses that get the alerts</label>
     <div class="chips" data-field="emails" data-placeholder="name@example.com"></div>
     <label class="check"><input type="checkbox" id="enabled" checked> <span><b>Active.</b> Untick to pause every alert for this person without deleting them.</span></label>
+    <div class="row">
+      <div><label for="plan">Access</label>
+        <select id="plan">
+          <option value="trial">Free trial</option>
+          <option value="full">Full access (no end date)</option>
+        </select></div>
+      <div id="trial-box"><label for="trial_days">Trial length (days)</label><input type="number" id="trial_days" min="1" max="365" step="1"></div>
+    </div>
+    <div class="muted" id="trial-hint" style="margin-top:6px"></div>
+    <button type="button" id="trial-restart" style="margin-top:8px" hidden>Start a new trial from today</button>
 
     <h3>What jobs</h3>
     <label>Roles (job titles to look for)</label>

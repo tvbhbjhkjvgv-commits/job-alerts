@@ -9,6 +9,7 @@ import os
 import subprocess
 import sys
 import tempfile
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
@@ -170,6 +171,76 @@ with tempfile.TemporaryDirectory() as folder:
     check("candidate list: printed for the workflow, with no name or address in it",
           printed.returncode == 0 and lines.get("sites_count") == "2" and json.loads(lines.get("fast", "[]")) == [{"id": "java01"}]
           and "example.com" not in printed.stdout + printed.stderr and "Test Person" not in printed.stdout + printed.stderr, printed.stdout + printed.stderr)
+
+# --- 6. the free trial and the welcome mail -----------------------------------------------------------
+NOW = datetime.now(timezone.utc)
+
+
+def on_trial(hours_ago, **more):
+    started = (NOW - timedelta(hours=hours_ago)).isoformat().replace("+00:00", "Z")
+    return {**PYTHON, "name": "Asha Rao", "plan": "trial", "trial_started": started, "trial_days": 7, **more}
+
+
+fresh, day_old, ended = (core.normalise_profile(on_trial(hours)) for hours in (1, 30, 24 * 8))
+check("a trial ends its number of days after it started", abs((core.trial_end(fresh) - NOW).total_seconds() - (7 * 24 - 1) * 3600) < 5
+      and not core.trial_is_over(fresh) and core.trial_is_over(ended) and not core.trial_is_over(core.normalise_profile(on_trial(24 * 8, trial_days=30))))
+check("the welcome is due only in the first day of a trial", core.welcome_is_due(fresh) and not core.welcome_is_due(day_old) and not core.welcome_is_due(ended)
+      and not core.welcome_is_due(core.normalise_profile(on_trial(1, enabled=False))))
+plain = core.normalise_profile(PYTHON)
+check("a file with no plan has full access: no end, no welcome", plain["plan"] == "full" and core.trial_end(plain) is None
+      and not core.trial_is_over(plain) and not core.welcome_is_due(plain))
+try:
+    core.normalise_profile({**PYTHON, "plan": "trial"})
+    message = ""
+except ValueError as exc:
+    message = str(exc)
+check("refused: a trial with no start", "trial_started" in message, message)
+
+with tempfile.TemporaryDirectory() as folder:
+    people = Path(folder) / "candidates"
+    people.mkdir()
+    for name, hours in (("fresh1", 1), ("dayold1", 30), ("ended1", 24 * 8)):
+        (people / f"{name}.json").write_text(json.dumps(on_trial(hours, id=name)), encoding="utf-8")
+    listed = matrix.matrices(matrix.read_candidates(Path(folder)))
+    check("candidate list: a candidate whose trial has ended is scanned no more",
+          [e["id"] for e in listed["linkedin"]] == ["dayold1", "fresh1"] and [e["id"] for e in listed["sites"]] == ["dayold1", "fresh1"], str(listed["linkedin"]))
+    check("candidate list: only the newly added candidate is due a welcome", [e["id"] for e in listed["welcome"]] == ["fresh1"], str(listed["welcome"]))
+
+mails = []
+core.send_gmail = lambda subject, body, attachment=None: mails.append((subject, body)) or True
+applied = core.apply_profile(on_trial(1))
+ends_on = core.trial_end(applied).astimezone(core.ZoneInfo("Asia/Kolkata")).strftime("%d %b %Y")
+code = core.send_welcome(applied)
+subject, body = mails[0] if mails else ("", "")
+check("welcome mail: sent once, and says the trial and its last day", code == 0 and len(mails) == 1 and subject == f"Your job alerts are active: free trial until {ends_on}"
+      and "Hi Asha," in body and "free trial" in body and "7 days" in body and ends_on in body and "Python Developer, AI Engineer" in body, subject)
+check("welcome mail: lists the alerts that are on, and nothing about how the scans are run",
+      "LinkedIn, every hour" in body and "Fast alert for Hyderabad" in body and "Company career pages" in body
+      and not any(word in body.lower() for word in ("github", "workflow", "repository", "actions")), body[:300])
+check("welcome mail: not sent when it is not due", core.send_welcome(core.normalise_profile(on_trial(30))) == 0 and len(mails) == 1)
+core.send_gmail = lambda subject, body, attachment=None: False
+check("welcome mail: a mail that could not be sent is a failure, so it is tried again", core.send_welcome(applied) == 1)
+
+# --- 7. what a candidate's mail looks like ------------------------------------------------------------
+found = job("Python Developer", "2-4 years of experience in Python, Django, PostgreSQL and Docker.", location="Hyderabad, Telangana, India",
+            skill_match_pct=80, matched_skills=["python", "django", "postgresql", "docker"], missing_skills=["kafka"], freshness_badge="<1h ago", is_easy_apply=True)
+low = {**found, "job_id": "2", "title": "Backend Engineer", "skill_match_pct": 40}
+MAILS = {
+    "LinkedIn hourly": core.build_email_html([found], [found, low], scan_summary="<p>Scanned 300 postings</p>", min_match=60),
+    "fast alert": core.build_fast_alert_email_html("Hyderabad (Hybrid) jobs apply fast", [found], [], 2.0, 70),
+    "career pages": cp.build_mail([found], [low], 2.0, ["EPAM is not covered: its site refuses a script."], ["Amazon", "Infosys"]),
+}
+for label, text in MAILS.items():
+    lowered = text.lower()
+    hidden = [word for word in ("github", "workflow", "repository", "run time", "not covered", "scanned", "automated", "filtered", "overflow-x") if word in lowered]
+    check(f"{label} mail: the tables and nothing about the scan", not hidden and "<table" in text and "Python Developer" in text, str(hidden))
+    check(f"{label} mail: six narrow columns, sized to fit the window", text.count("<col ") % 6 == 0 and text.count("<th ") % 6 == 0
+          and "table-layout:fixed;width:100%" in text and "font-size:11px" in text, f"{text.count('<col ')} {text.count('<th ')}")
+check("LinkedIn hourly mail: the second table holds only the jobs below the match", MAILS["LinkedIn hourly"].count("Backend Engineer") == 1
+      and MAILS["LinkedIn hourly"].count(">Python Developer<") == 1 and "Other new jobs, below 60% (1)" in MAILS["LinkedIn hourly"])
+check("an empty table is left out", "states no years" not in MAILS["fast alert"] and "Apply now (1)" in MAILS["fast alert"])
+check("a quiet hour, for a candidate who asked for hourly mails, is one line",
+      "No new matching jobs in the last 1 hour(s)." in core.build_status_email_html([found], 1.0, 2.0) and "<table" not in core.build_status_email_html([found], 1.0, 2.0))
 
 checked = subprocess.run([sys.executable, str(ROOT / "tools" / "build_page_data.py"), "--check"], capture_output=True, text=True)
 check("the settings page's data file matches the code", checked.returncode == 0, checked.stdout)
