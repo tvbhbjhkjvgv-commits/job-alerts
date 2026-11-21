@@ -264,7 +264,7 @@
   ],
   "gcp": [
    "\\bgcp\\b",
-   "\\bgoogle cloud platform\\b"
+   "\\bgoogle cloud(?: platform)?\\b"
   ],
   "generative ai": [
    "\\bgen(?:erative)?[- ]?ai\\b"
@@ -518,7 +518,7 @@
    "\\bpower\\s+automate\\b"
   ],
   "power bi": [
-   "\\bpower bi\\b"
+   "\\bpower\\s?bi\\b"
   ],
   "power query": [
    "\\bpower\\s+query\\b"

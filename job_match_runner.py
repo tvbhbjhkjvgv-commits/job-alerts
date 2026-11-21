@@ -195,7 +195,7 @@ SKILL_PATTERNS: Dict[str, Tuple[str, ...]] = {
     "css3": (r"\bcss3?\b",),
     "responsive ui": (r"\bresponsive (?:ui|user interface|web design)\b",),
     "postman": (r"\bpostman\b",),
-    "power bi": (r"\bpower bi\b",),
+    "power bi": (r"\bpower\s?bi\b",),
     "github": (r"\bgithub\b",),
     "django": (r"\bdjango\b",),
     "django rest framework": (r"\bdjango rest framework\b", r"\bdrf\b"),
@@ -226,7 +226,7 @@ SKILL_PATTERNS: Dict[str, Tuple[str, ...]] = {
     "git": (r"\bgit\b", r"\bgithub\b"),
     "aws": (r"\baws\b", r"\bamazon web services\b"),
     "azure": (r"\bazure\b",),
-    "gcp": (r"\bgcp\b", r"\bgoogle cloud platform\b"),
+    "gcp": (r"\bgcp\b", r"\bgoogle cloud(?: platform)?\b"),
     "jwt": (r"\bjwt\b", r"\bjson web tokens?\b"),
     "rbac": (r"\brbac\b", r"\brole[- ]based access control\b"),
     "session management": (r"\bsession management\b",),
@@ -905,6 +905,7 @@ def _add_brain_skills(job: Dict[str, Any], required: Set[str], optional: Set[str
     text = f"{job.get('title') or ''}\n{job.get('description') or ''}".lower()
     found = required | optional | left_out
     has_sql_engine = any(engine in found for engine in SQL_ENGINES)
+    spelled = {re.sub(r"[^a-z0-9+#]", "", skill): skill for skill in [*SKILL_PATTERNS, *CANDIDATE_SKILLS]}
     for names, target in ((answer.get("required") or [], required), (answer.get("optional") or [], optional)):
         for name in names:
             name = str(name or "").strip().lower()
@@ -912,7 +913,9 @@ def _add_brain_skills(job: Dict[str, Any], required: Set[str], optional: Set[str
                 continue
             if not re.search(_literal_pattern(name), text):
                 continue  # the posting does not say it: the model made it up or reworded it
-            for skill in canonical_skill_hits(name) or [name]:
+            # "PowerBI" is "power bi": a name that differs from a known skill only in spaces and punctuation is that skill.
+            same = spelled.get(re.sub(r"[^a-z0-9+#]", "", name))
+            for skill in canonical_skill_hits(name) or ([same] if same else [name]):
                 if skill not in found and not (skill == "sql" and has_sql_engine):
                     target.add(skill)
                     found.add(skill)

@@ -74,7 +74,9 @@ Rules
 - Do not list soft skills (communication, teamwork, leadership), degrees, years, job titles, company names,
   or general words that are not a skill on their own (development, testing, analysis, experience).
 - required_skills: skills the posting asks for outright.
-- optional_skills: skills it marks as preferred, nice to have, good to have, or a plus.
+- optional_skills: skills it marks as preferred, nice to have, good to have, or a plus. Also put here skills
+  given only as examples or as alternatives to each other ("tools such as SAS, SPSS or R", "one of Java, Go or Python").
+- Do not list general activities or categories (automation, scripting, reporting, data mining tools, cloud platforms).
 - At most 20 required and 10 optional skills. No skill twice.
 - min_years and max_years: the total years of work experience the posting asks for.
   "3-5 years" gives 3 and 5. "5+ years" gives 5 and null. "up to 2 years" gives null and 2.
@@ -87,7 +89,11 @@ NOT_A_SKILL = {
     "problem-solving", "analytical skills", "analytical thinking", "collaboration", "time management", "interpersonal skills",
     "attention to detail", "agile", "english", "development", "testing", "analysis", "experience", "coding", "programming",
     "software development", "debugging", "documentation", "stakeholder management", "presentation skills", "critical thinking",
+    "automation", "scripting", "reporting", "dashboards", "dashboarding", "data pipelining", "data pipelines", "cloud platforms",
+    "databases", "data visualization", "data analysis", "business intelligence", "analytics", "troubleshooting",
 }
+# A "skill" that ends in one of these words is a category, not something a person lists ("data mining tools").
+_CATEGORY_ENDINGS = ("tools", "skills", "techniques", "concepts", "principles", "methodologies", "technologies", "platforms", "languages")
 
 FOREVER = float("inf")
 _UNUSABLE: Dict[Tuple[str, str], float] = {}   # (provider, model or "*") -> unusable until this time.monotonic()
@@ -162,6 +168,8 @@ def _skills(value: Any) -> List[str]:
         name = re.sub(r"\s+", " ", item).strip(" .,;:-")
         if not name or len(name) > 40 or len(name.split()) > 5 or name.lower() in NOT_A_SKILL:
             continue
+        if len(name.split()) > 1 and name.lower().split()[-1] in _CATEGORY_ENDINGS:
+            continue
         if name.lower() not in {existing.lower() for existing in out}:
             out.append(name)
     return out[:MAX_SKILLS]
@@ -193,6 +201,7 @@ def _ask(provider: Dict[str, Any], model: str, title: str, text: str) -> Tuple[s
     }
     headers = {"Authorization": f"Bearer {os.environ[provider['key']].strip()}", "Content-Type": "application/json"}
     waited = False
+    busy = 0
     while True:
         if _time_left() <= 0:
             return "stop", "time allowed for the brain is used up"
@@ -233,7 +242,12 @@ def _ask(provider: Dict[str, Any], model: str, title: str, text: str) -> Tuple[s
             _UNUSABLE[(name, model)] = FOREVER
             LOG.warning("Brain: %s does not serve the model %s any more (HTTP %d); update %s.", name, model, status, provider["models_env"])
             return "next", f"HTTP {status}"
-        _UNUSABLE[(name, model)] = time.monotonic() + 300
+        # A busy moment on a free plan ("overloaded", HTTP 5xx) usually passes in seconds: ask twice more, briefly apart.
+        if status >= 500 and busy < 2 and _time_left() > 15:
+            busy += 1
+            time.sleep(2.0 * busy)
+            continue
+        _UNUSABLE[(name, model)] = time.monotonic() + 60
         return "next", f"HTTP {status}"
 
 
