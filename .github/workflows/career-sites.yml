@@ -19,7 +19,7 @@ on:
         required: false
         default: ''
       companies:
-        description: 'Optional comma-separated sites (ntt, amazon, cognizant, tiger, infor, jpmc, capgemini, ltim, ey, techm, wipro, infosys, accenture); empty = each candidate''s own list'
+        description: 'Optional comma-separated companies by key (for example infosys,amazon,okta,paytm; all keys are in company_portals.py); empty = each candidate''s own list'
         required: false
         default: ''
       dry_run:
@@ -70,7 +70,7 @@ jobs:
     needs: candidates
     if: ${{ needs.candidates.outputs.count != '0' }}
     runs-on: ubuntu-latest
-    # Thirteen sites, each allowed 4 minutes at most (SITE_BUDGET_SECONDS); a usual run takes about 3.
+    # Thirteen career sites and 65 job boards. A board is one quick request; a usual run takes about 5 minutes.
     timeout-minutes: 60
     strategy:
       fail-fast: false

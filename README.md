@@ -114,7 +114,9 @@ Expect match percentages to move once it is on: a posting that asks for five too
 
 ## Career sites read
 
-NTT DATA, Amazon, Cognizant, Tiger Analytics, Infor, JPMorgan Chase, Capgemini, LTIMindtree, EY, Tech Mahindra, Wipro, Infosys and Accenture. Not covered, and named as such in every career-site mail: EPAM, Cimpress, Sify and Hetero (their job boards do not answer a script).
+NTT DATA, Amazon, Cognizant, Tiger Analytics, Infor, JPMorgan Chase, Capgemini, LTIMindtree, EY, Tech Mahindra, Wipro, Infosys and Accenture.
+
+**Job boards (65 more companies).** Many companies publish their openings through their hiring system's public API (Greenhouse, Lever, Ashby, SmartRecruiters), which exists so that careers pages and other programs can read them. One request returns a company's whole list, so reading it costs the same for one candidate or a thousand. The companies read this way are listed in `BOARDS` in `company_portals.py` (Okta, Zscaler, Databricks, MongoDB, Stripe, Paytm, Meesho, CRED, Razorpay, Bosch, ServiceNow, Freshworks, OpenAI and others); each had openings in India when it was added. To add one, find the company's name in its careers-page address (for example `boards.greenhouse.io/<name>` or `jobs.lever.co/<name>`) and add a line. Not covered, and named as such in every career-site mail: EPAM, Cimpress, Sify and Hetero (their job boards do not answer a script).
 
 Tech Mahindra jobs have no link of their own: the row links to the openings page and the "Posted" cell gives the job reference number to type into "Job Reference ID" there.
 

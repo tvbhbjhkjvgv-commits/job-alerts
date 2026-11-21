@@ -351,8 +351,73 @@ senior_site = FakeSite({"elastic/findjobs": {"data": []}}, candidate_yoe=6.0)
 cp.read_accenture(senior_site)
 check("Accenture: the bands follow the candidate's years", json.loads(senior_site.posted[-1]["jobFilters"])[1]["items"] == ["Experience: 5-10 years"], str(senior_site.posted[-1]))
 
+# Job boards: a company's whole list from its hiring system's public API.
+greenhouse = cp._read_greenhouse(FakeSite({"boards-api.greenhouse.io/v1/boards/acme/jobs": {"jobs": [
+    {"id": 71, "title": "Software Engineer", "location": {"name": "Bengaluru"}, "absolute_url": "https://job-boards.greenhouse.io/acme/jobs/71",
+     "content": "&lt;p&gt;2-4 years of experience.&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Python &amp;amp; Django&lt;/li&gt;&lt;/ul&gt;", "first_published": "2026-11-18T06:21:15-04:00",
+     "metadata": [{"name": "Employment Type", "value": "Contract"}]},
+    {"id": 72, "title": "Software Engineer", "location": {"name": "Indianapolis, IN, United States"}, "absolute_url": "https://job-boards.greenhouse.io/acme/jobs/72", "content": "x"},
+    {"id": 73, "title": "Software Engineer", "location": {"name": "Remote - India"}, "absolute_url": "https://job-boards.greenhouse.io/acme/jobs/73", "content": "x", "metadata": None},
+]}}), "acme", "Acme", "acme")
+check("Greenhouse: only the India postings; 'Indianapolis, IN' is not India", [j["job_id"] for j in greenhouse] == ["acme:71", "acme:73"]
+      and [j["location"] for j in greenhouse] == ["Bengaluru, India", "Remote - India"], str([(j["job_id"], j["location"]) for j in greenhouse]))
+check("Greenhouse: the escaped text is read, with its date and its employment type",
+      greenhouse and greenhouse[0]["description"] == "2-4 years of experience.\nPython & Django" and greenhouse[0]["posted_time"] == "2026-11-18"
+      and not core.employment_is_eligible(greenhouse[0]) and core.employment_is_eligible(greenhouse[1]), repr(greenhouse and greenhouse[0]["description"]))
+
+lever = cp._read_lever(FakeSite({"api.lever.co/v0/postings/acme": [
+    {"id": "aa-1", "text": "backend developer", "country": "IN", "workplaceType": "hybrid", "createdAt": 1795000000000,
+     "categories": {"commitment": "part time", "location": "hyderabad", "allLocations": ["hyderabad", "chennai"]},
+     "hostedUrl": "https://jobs.lever.co/acme/aa-1", "description": "<div>Build services.</div>",
+     "lists": [{"text": "What you need", "content": "<li>3+ years in Python</li>"}], "additional": ""},
+    {"id": "aa-2", "text": "backend developer", "country": "US", "categories": {"location": "New York"}, "hostedUrl": "https://jobs.lever.co/acme/aa-2"},
+]}), "acme", "Acme", "acme")
+check("Lever: India by the country code, every place named, sections kept", len(lever) == 1 and lever[0]["location"] == "hyderabad / chennai, India"
+      and lever[0]["description"] == "Build services.\n\nWhat you need:\n3+ years in Python" and lever[0]["workplace_type"] == "Hybrid"
+      and lever[0]["job_url"] == "https://jobs.lever.co/acme/aa-1", str(lever))
+check("Lever: 'part time' written without a hyphen is still not full-time", lever and not core.employment_is_eligible(lever[0]), str(lever and lever[0]["employment_type"]))
+try:
+    cp._read_lever(FakeSite({"api.lever.co": {"ok": False}}), "acme", "Acme", "acme")
+    refused = False
+except cp.PortalError:
+    refused = True
+check("Lever: an answer that is not a list is a site failure", refused)
+
+ashby = cp._read_ashby(FakeSite({"api.ashbyhq.com/posting-api/job-board/acme": {"jobs": [
+    {"id": "u-1", "title": "AI Engineer", "location": "Delhi", "secondaryLocations": [{"location": "Singapore"}, {"location": "Pune"}], "isListed": True,
+     "address": {"postalAddress": {"addressCountry": "India"}}, "employmentType": "FullTime", "isRemote": False, "workplaceType": "OnSite",
+     "jobUrl": "https://jobs.ashbyhq.com/acme/u-1", "descriptionHtml": "<p>1-3 years.</p><p>Python</p>", "publishedAt": "2026-04-17T11:46:39.214+00:00"},
+    {"id": "u-2", "title": "AI Engineer", "location": "Bengaluru", "isListed": False, "jobUrl": "https://jobs.ashbyhq.com/acme/u-2", "descriptionHtml": "x"},
+    {"id": "u-3", "title": "AI Engineer", "location": "London", "isListed": True, "address": {"postalAddress": {"addressCountry": "United Kingdom"}},
+     "jobUrl": "https://jobs.ashbyhq.com/acme/u-3", "descriptionHtml": "x"},
+]}}), "acme", "Acme", "acme")
+check("Ashby: India places only, an unlisted posting is left alone", len(ashby) == 1 and ashby[0]["location"] == "Delhi, India / Pune, India"
+      and ashby[0]["employment_type"] == "Full-time" and ashby[0]["workplace_type"] == "On-site" and ashby[0]["posted_time"] == "2026-04-17", str(ashby))
+
+smart_site = FakeSite({
+    "/postings/744": {"postingUrl": "https://jobs.smartrecruiters.com/Acme/744-python-developer", "jobAd": {"sections": {
+        "companyDescription": {"text": "<p>We have 30 years of experience in travel.</p>"}, "jobDescription": {"text": "<p>Build APIs in Python.</p>"},
+        "qualifications": {"text": "<ul><li>2+ years of experience</li></ul>"}, "additionalInformation": {"text": ""}}}},
+    "/companies/Acme/postings": {"totalFound": 1, "content": [{"id": "744", "name": "Python Developer", "releasedDate": "2026-11-17T05:14:27.193Z",
+                                 "location": {"city": "Gurugram", "country": "in", "remote": False, "hybrid": True}, "typeOfEmployment": {"label": "Full-time"}}]},
+})
+smart = one(cp._read_smartrecruiters(smart_site, "acme", "Acme", "Acme"))
+fill = smart.pop("_detail", None)
+check("SmartRecruiters: listed without text, in India, with a link", (smart.get("job_id"), smart.get("location"), smart.get("description"), smart.get("workplace_type")) ==
+      ("acme:744", "Gurugram, India", "", "Hybrid") and smart.get("job_url") == "https://jobs.smartrecruiters.com/Acme/744" and fill is not None, str(smart))
+if fill:
+    fill(smart_site, smart)
+check("SmartRecruiters: the job page gives the text (not the company's own history) and the full link",
+      smart.get("description") == "Build APIs in Python.\n\nQualifications:\n2+ years of experience"
+      and smart.get("job_url") == "https://jobs.smartrecruiters.com/Acme/744-python-developer" and core.parse_experience_requirement(smart) == (2.0, None), smart.get("description", ""))
+keys = [board[0] for board in cp.BOARDS]
+check("job boards: every company has its own key, a known hiring system, and is scanned",
+      len(keys) == len(set(keys)) and all(board[2] in cp._BOARD_READERS for board in cp.BOARDS) and set(keys) <= set(cp.PORTALS)
+      and all(key.isalnum() and key.islower() for key in keys))
+
 check("the companies asked for are either read or named as not covered",
-      set(cp.PORTALS) == {"ntt", "amazon", "cognizant", "tiger", "infor", "jpmc", "capgemini", "ltim", "ey", "techm", "wipro", "infosys", "accenture"}
+      {"ntt", "amazon", "cognizant", "tiger", "infor", "jpmc", "capgemini", "ltim", "ey", "techm", "wipro", "infosys", "accenture"} <= set(cp.PORTALS)
+      and len(cp.PORTALS) == 13 + len(cp.BOARDS)
       and set(cp.NOT_COVERED) == {"EPAM", "Cimpress", "Sify", "Hetero"})
 
 

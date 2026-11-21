@@ -629,6 +629,188 @@ def read_accenture(site: Site) -> List[Dict[str, Any]]:
     return list(jobs.values())
 
 
+# ---------------------------------------------------------------------------
+# Job boards: companies that publish their openings through their hiring system's public API
+# ---------------------------------------------------------------------------
+# Greenhouse, Lever, Ashby and SmartRecruiters each give every customer a public, read-only list of
+# its published jobs, made for building careers pages. One request returns a company's whole list,
+# so a company costs the same to read whether one candidate or a thousand are matched against it.
+# BOARDS is the list of companies read this way: every one had openings in India when it was added
+# (2026-11-21). To add a company, find the name in its careers-page address and add a line.
+_INDIA_RE = re.compile(
+    r"\b(?:india|" + "|".join(re.escape(name) for names in core.CITY_ALIASES.values() for name in names) + r")\b", re.I)
+_EMPLOYMENT_WORDS = {"fulltime": "Full-time", "full time": "Full-time", "parttime": "Part-time", "part time": "Part-time",
+                     "intern": "Internship", "contract": "Contract", "temporary": "Temporary"}
+
+
+def _employment(value: Any) -> str:
+    """'FullTime', 'full time', 'Part Time' -> one spelling, so the full-time rule reads them all."""
+    text = _one_line(value)
+    return _EMPLOYMENT_WORDS.get(text.lower(), text)
+
+
+def _india_place(place: Any, country: Any = "") -> str:
+    """The place as text when it is in India ('Bengaluru' + country 'IN' -> 'Bengaluru, India'), else ''."""
+    text = _one_line(place)
+    in_india = str(country or "").strip().lower() in ("in", "india")
+    if not in_india and not _INDIA_RE.search(text):
+        return ""
+    return text if re.search(r"\bindia\b", text, re.I) else (f"{text}, India" if text else "India")
+
+
+def _read_greenhouse(site: Site, key: str, company: str, board: str) -> List[Dict[str, Any]]:
+    data = site.json(f"https://boards-api.greenhouse.io/v1/boards/{board}/jobs", {"content": "true"})
+    jobs = []
+    for item in data.get("jobs") or []:
+        place = _india_place((item.get("location") or {}).get("name"))
+        url = str(item.get("absolute_url") or "")
+        if not place or not item.get("id") or not url.startswith("https://"):
+            continue
+        kind = next((m.get("value") for m in item.get("metadata") or [] if isinstance(m, dict) and m.get("name") == "Employment Type"), "")
+        jobs.append(_record(
+            key, company, item["id"], item.get("title"), place, url,
+            description=_text(html.unescape(str(item.get("content") or ""))),  # the text arrives as escaped HTML
+            posted=str(item.get("first_published") or item.get("updated_at") or "")[:10],
+            employment=_employment(kind if isinstance(kind, str) else ""),
+        ))
+    return jobs
+
+
+def _read_lever(site: Site, key: str, company: str, board: str) -> List[Dict[str, Any]]:
+    data = site.json(f"https://api.lever.co/v0/postings/{board}", {"mode": "json"})
+    if not isinstance(data, list):
+        raise PortalError(f"unreadable answer from https://api.lever.co/v0/postings/{board}")
+    jobs = []
+    for item in data:
+        groups = item.get("categories") or {}
+        places = groups.get("allLocations") or [groups.get("location")]
+        place = _india_place(" / ".join(_one_line(p) for p in places if p), item.get("country"))
+        url = str(item.get("hostedUrl") or "")
+        if not place or not item.get("id") or not url.startswith("https://"):
+            continue
+        created = item.get("createdAt")
+        posted = datetime.fromtimestamp(created / 1000, timezone.utc).strftime("%Y-%m-%d") if isinstance(created, (int, float)) else ""
+        mode = _one_line(item.get("workplaceType"))
+        jobs.append(_record(
+            key, company, item["id"], item.get("text"), place, url,
+            description=_sections(
+                ("", item.get("description")),
+                *[(_one_line(part.get("text")), part.get("content")) for part in item.get("lists") or [] if isinstance(part, dict)],
+                ("", item.get("additional")),
+            ),
+            posted=posted, workplace="" if mode.lower() in ("", "unspecified") else mode.title(),
+            employment=_employment(groups.get("commitment")),
+        ))
+    return jobs
+
+
+def _read_ashby(site: Site, key: str, company: str, board: str) -> List[Dict[str, Any]]:
+    data = site.json(f"https://api.ashbyhq.com/posting-api/job-board/{board}")
+    jobs = []
+    for item in data.get("jobs") or []:
+        if item.get("isListed") is False:  # "should only be available via direct link"
+            continue
+        country = (((item.get("address") or {}).get("postalAddress")) or {}).get("addressCountry")
+        places = [item.get("location"), *[other.get("location") for other in item.get("secondaryLocations") or [] if isinstance(other, dict)]]
+        india = [p for p in (_india_place(place, country if index == 0 else "") for index, place in enumerate(places) if place) if p]
+        url = str(item.get("jobUrl") or "")
+        if not india or not item.get("id") or not url.startswith("https://"):
+            continue
+        mode = _one_line(item.get("workplaceType"))
+        jobs.append(_record(
+            key, company, item["id"], item.get("title"), " / ".join(india), url,
+            description=_text(item.get("descriptionHtml")) or str(item.get("descriptionPlain") or ""),
+            posted=str(item.get("publishedAt") or "")[:10],
+            workplace="Remote" if item.get("isRemote") else {"onsite": "On-site", "hybrid": "Hybrid", "remote": "Remote"}.get(mode.lower(), ""),
+            employment=_employment(item.get("employmentType")),
+        ))
+    return jobs
+
+
+_SMART_API = "https://api.smartrecruiters.com/v1/companies/"
+_SMART_PAGE = 100
+_SMART_PAGES = 3  # the newest 300 India postings of a company
+
+
+def _smart_detail(board: str) -> Callable[[Site, Dict[str, Any]], None]:
+    def fill(site: Site, job: Dict[str, Any]) -> None:
+        data = site.json(f"{_SMART_API}{board}/postings/{job['job_id'].split(':', 1)[1]}")
+        parts = ((data.get("jobAd") or {}).get("sections")) or {}
+        job["description"] = _sections(*[
+            (heading, (parts.get(name) or {}).get("text"))
+            for name, heading in (("jobDescription", ""), ("qualifications", "Qualifications"), ("additionalInformation", "Additional information"))
+        ])
+        if str(data.get("postingUrl") or "").startswith("https://"):
+            job["job_url"] = job["apply_url"] = data["postingUrl"]
+    return fill
+
+
+def _read_smartrecruiters(site: Site, key: str, company: str, board: str) -> List[Dict[str, Any]]:
+    jobs = []
+    for page in range(_SMART_PAGES):
+        data = site.json(f"{_SMART_API}{board}/postings", {"country": "in", "limit": _SMART_PAGE, "offset": page * _SMART_PAGE})
+        items = data.get("content") or []
+        for item in items:
+            where = item.get("location") or {}
+            if not item.get("id"):
+                continue
+            record = _record(
+                key, company, item["id"], item.get("name"), _india_place(where.get("city") or where.get("region"), "in"),
+                f"https://jobs.smartrecruiters.com/{board}/{item['id']}", posted=str(item.get("releasedDate") or "")[:10],
+                workplace="Remote" if where.get("remote") else ("Hybrid" if where.get("hybrid") else ""),
+                employment=_employment((item.get("typeOfEmployment") or {}).get("label")),
+            )
+            record["_detail"] = _smart_detail(board)
+            jobs.append(record)
+        if len(items) < _SMART_PAGE or (page + 1) * _SMART_PAGE >= int(data.get("totalFound") or 0):
+            break
+    return jobs
+
+
+_BOARD_READERS: Dict[str, Callable[[Site, str, str, str], List[Dict[str, Any]]]] = {
+    "greenhouse": _read_greenhouse, "lever": _read_lever, "ashby": _read_ashby, "smartrecruiters": _read_smartrecruiters,
+}
+
+# (key, company as shown in the mail, hiring system, the company's name on that system)
+BOARDS: Tuple[Tuple[str, str, str, str], ...] = (
+    ("okta", "Okta", "greenhouse", "okta"), ("zscaler", "Zscaler", "greenhouse", "zscaler"),
+    ("databricks", "Databricks", "greenhouse", "databricks"), ("mongodb", "MongoDB", "greenhouse", "mongodb"),
+    ("purestorage", "Pure Storage", "greenhouse", "purestorage"), ("stripe", "Stripe", "greenhouse", "stripe"),
+    ("rubrik", "Rubrik", "greenhouse", "rubrik"), ("inmobi", "InMobi", "greenhouse", "inmobi"),
+    ("sigmoid", "Sigmoid", "greenhouse", "sigmoid"), ("gitlab", "GitLab", "greenhouse", "gitlab"),
+    ("tide", "Tide", "greenhouse", "tide"), ("razorpay", "Razorpay", "greenhouse", "razorpaysoftwareprivatelimited"),
+    ("toast", "Toast", "greenhouse", "toast"), ("celonis", "Celonis", "greenhouse", "celonis"),
+    ("fivetran", "Fivetran", "greenhouse", "fivetran"), ("netskope", "Netskope", "greenhouse", "netskope"),
+    ("hackerrank", "HackerRank", "greenhouse", "hackerrank"), ("twilio", "Twilio", "greenhouse", "twilio"),
+    ("agoda", "Agoda", "greenhouse", "agoda"), ("elastic", "Elastic", "greenhouse", "elastic"),
+    ("harness", "Harness", "greenhouse", "harnessinc"), ("glance", "Glance", "greenhouse", "glance"),
+    ("sumologic", "Sumo Logic", "greenhouse", "sumologic"), ("airbnb", "Airbnb", "greenhouse", "airbnb"),
+    ("druva", "Druva", "greenhouse", "druva"), ("coinbase", "Coinbase", "greenhouse", "coinbase"),
+    ("groww", "Groww", "greenhouse", "groww"), ("datadog", "Datadog", "greenhouse", "datadog"),
+    ("commvault", "Commvault", "greenhouse", "commvault"), ("turing", "Turing", "greenhouse", "turing"),
+    ("starburst", "Starburst", "greenhouse", "starburst"), ("singlestore", "SingleStore", "greenhouse", "singlestore"),
+    ("neo4j", "Neo4j", "greenhouse", "neo4j"), ("samsara", "Samsara", "greenhouse", "samsara"),
+    ("newrelic", "New Relic", "greenhouse", "newrelic"), ("yugabyte", "Yugabyte", "greenhouse", "yugabyte"),
+    ("mixpanel", "Mixpanel", "greenhouse", "mixpanel"), ("yext", "Yext", "greenhouse", "yext"),
+    ("paytm", "Paytm", "lever", "paytm"), ("meesho", "Meesho", "lever", "meesho"), ("hevodata", "Hevo Data", "lever", "hevodata"),
+    ("zeta", "Zeta", "lever", "zeta"), ("mindtickle", "Mindtickle", "lever", "mindtickle"), ("fampay", "FamPay", "lever", "fampay"),
+    ("cred", "CRED", "lever", "cred"), ("outreach", "Outreach", "lever", "outreach"),
+    ("sarvam", "Sarvam AI", "ashby", "sarvam"), ("ema", "Ema", "ashby", "ema"), ("airwallex", "Airwallex", "ashby", "airwallex"),
+    ("clickhouse", "ClickHouse", "ashby", "clickhouse"), ("openai", "OpenAI", "ashby", "openai"),
+    ("elevenlabs", "ElevenLabs", "ashby", "elevenlabs"), ("harvey", "Harvey", "ashby", "harvey"), ("cursor", "Cursor", "ashby", "cursor"),
+    ("anyscale", "Anyscale", "ashby", "anyscale"), ("composio", "Composio", "ashby", "composio"),
+    ("bosch", "Bosch", "smartrecruiters", "BoschGroup"), ("servicenow", "ServiceNow", "smartrecruiters", "ServiceNow"),
+    ("wabtec", "Wabtec", "smartrecruiters", "Wabtec"), ("nielseniq", "NielsenIQ", "smartrecruiters", "NielsenIQ"),
+    ("sutherland", "Sutherland", "smartrecruiters", "Sutherland"), ("experian", "Experian", "smartrecruiters", "Experian"),
+    ("freshworks", "Freshworks", "smartrecruiters", "Freshworks"), ("continental", "Continental", "smartrecruiters", "Continental"),
+    ("ixigo", "ixigo", "smartrecruiters", "Ixigo"),
+)
+
+
+def _board_reader(system: str, board: str, key: str, company: str) -> Callable[[Site], List[Dict[str, Any]]]:
+    return lambda site: _BOARD_READERS[system](site, key, company, board)
+
+
 # key: (name shown in the mail, reader). The order is the order of the scan.
 PORTALS: Dict[str, Tuple[str, Callable[[Site], List[Dict[str, Any]]]]] = {
     "ntt": ("NTT DATA", read_ntt_data),
@@ -645,6 +827,7 @@ PORTALS: Dict[str, Tuple[str, Callable[[Site], List[Dict[str, Any]]]]] = {
     "infosys": ("Infosys", read_infosys),
     "accenture": ("Accenture", read_accenture),
 }
+PORTALS.update({key: (company, _board_reader(system, board, key, company)) for key, company, system, board in BOARDS})
 # Asked for, but not readable by a script. Each entry is said in every mail, so the gap is not forgotten.
 NOT_COVERED = {
     "EPAM": "its India career site (jobs.welcome.epam.in) hands a script only 10 of its roughly 340 jobs, in no date order",
